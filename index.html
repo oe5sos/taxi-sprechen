@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Taxi-Tagebuch – Sprechen</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-title" content="Tagebuch">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&display=swap">
+<style>
+/* Ein großer Knopf: tippen, reden, der Satz geht ins Tagebuch. Farben wie das Tagebuch (Fahne #f5b400, Tinte #15120d). */
+:root {
+  --bg: #f2f2ee; --surface: #ffffff; --ink: #15120d; --muted: #625d53; --line: #dcd9d0;
+  --amber: #f5b400; --on-amber: #15120d; --amber-soft: #fbedc4; --warn: #8f5500;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f0e0c; --surface: #1a1815; --ink: #f1ece2; --muted: #a59d8e; --line: #2f2b25; --amber-soft: #3a2f12; --warn: #e3a64e; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 500 18px/1.45 "Barlow", system-ui, -apple-system, sans-serif;
+  padding: env(safe-area-inset-top, 0) max(16px, env(safe-area-inset-right, 0)) env(safe-area-inset-bottom, 0) max(16px, env(safe-area-inset-left, 0));
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 520px; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; padding-block: 20px 28px; }
+.kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.marke { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; }
+.fahne { width: 34px; height: 22px; border-radius: 4px; background: var(--amber); color: var(--on-amber); display: grid; place-items: center; font: 700 11px/1 "Barlow", sans-serif; letter-spacing: .08em; }
+.ansehen { color: var(--ink); font-weight: 600; font-size: 16px; text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; background: var(--surface); }
+.mitte { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center; }
+#knopf {
+  width: min(62vw, 240px); aspect-ratio: 1; border-radius: 50%; border: 0;
+  background: var(--amber); color: var(--on-amber); display: grid; place-items: center; cursor: pointer;
+  box-shadow: 0 10px 30px rgba(0,0,0,.22); -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+#knopf svg { width: 42%; height: 42%; }
+#knopf.hoert { background: var(--ink); color: var(--amber); }
+@media (prefers-reduced-motion: no-preference) { #knopf.hoert { animation: puls 1.2s ease-in-out infinite; } }
+@keyframes puls { 50% { box-shadow: 0 0 0 18px rgba(245,180,0,.25), 0 10px 30px rgba(0,0,0,.22); } }
+#knopf:focus-visible { outline: 4px solid var(--ink); outline-offset: 6px; }
+.zustand { font-size: 22px; font-weight: 700; min-height: 1.4em; }
+.text { font-size: 20px; min-height: 2.8em; max-width: 30ch; overflow-wrap: anywhere; color: var(--ink); }
+.text.vorlaeufig { color: var(--muted); font-style: italic; }
+.reihe { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.knopf2 { min-height: 50px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); padding: 0 20px; font: 600 18px/1 "Barlow", sans-serif; color: var(--ink); cursor: pointer; }
+.knopf2.haupt { background: var(--amber); border-color: transparent; color: var(--on-amber); }
+.hinweis { background: var(--amber-soft); border-radius: 14px; padding: 12px 14px; font-size: 16px; text-align: left; }
+.ersatz { width: 100%; display: grid; gap: 10px; }
+.ersatz textarea { width: 100%; min-height: 110px; border: 2px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); padding: 12px; font: 500 19px/1.4 "Barlow", sans-serif; }
+.fuss { text-align: center; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kopf">
+    <div class="marke"><span class="fahne" aria-hidden="true">TAXI</span>Tagebuch</div>
+    <a class="ansehen" id="ansehen" href="#">Tagebuch ansehen</a>
+  </div>
+
+  <div class="mitte">
+    <button id="knopf" type="button" aria-label="Sprechen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <div class="zustand" id="zustand" aria-live="polite">Sprechen</div>
+    <div class="text" id="text"></div>
+    <div class="reihe" id="auswahl" hidden>
+      <button type="button" class="knopf2" id="nochmal">Nochmal</button>
+      <button type="button" class="knopf2 haupt" id="jetzt">Eintragen</button>
+    </div>
+    <div class="hinweis" id="hinweis" hidden></div>
+    <div class="ersatz" id="ersatz" hidden>
+      <textarea id="eingabe" enterkeyhint="send" placeholder="Hier tippen, dann das Mikrofon auf der Tastatur"></textarea>
+      <button type="button" class="knopf2 haupt" id="senden">Eintragen</button>
+    </div>
+  </div>
+
+  <div class="fuss">Tippen, reden, kurz still sein – der Satz geht ins Tagebuch.</div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const TAGEBUCH = "https://claude.ai/artifact/5Nwys2KUbVcisHQttM87nU";
+  const $ = (s) => document.querySelector(s);
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let erkenner = null, text = "", laeuft = false, uhr = null;
+
+  $("#ansehen").href = TAGEBUCH;
+
+  // Gleiche Kodierung wie die Seite erwartet: Base64 der UTF-8-Bytes, „+“→„-a“, „/“→„-b“, ohne „=“.
+  function kodieren(t) {
+    const bytes = new TextEncoder().encode(t);
+    let bin = "";
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, "-a").replace(/\//g, "-b").replace(/=+$/, "");
+  }
+  function weiter(t) {
+    t = (t || "").trim();
+    if (!t) return;
+    $("#zustand").textContent = "Wird eingetragen …";
+    location.href = TAGEBUCH + "#s-" + kodieren(t);
+  }
+
+  function zeige(zustand, satz, vorlaeufig) {
+    $("#zustand").textContent = zustand;
+    const el = $("#text");
+    el.textContent = satz || "";
+    el.classList.toggle("vorlaeufig", !!vorlaeufig);
+  }
+
+  function ersatzZeigen(grund) {
+    $("#hinweis").innerHTML = grund;
+    $("#hinweis").hidden = false;
+    $("#ersatz").hidden = false;
+  }
+
+  function fertig() {
+    laeuft = false;
+    $("#knopf").classList.remove("hoert");
+    const t = text.trim();
+    if (!t) { zeige("Nichts verstanden – nochmal tippen", ""); return; }
+    zeige("Wird gleich eingetragen", "„" + t + "“");
+    $("#auswahl").hidden = false;
+    // Kurz Zeit zum Abbrechen, dann von selbst weiter
+    let rest = 3;
+    $("#jetzt").textContent = "Eintragen (" + rest + ")";
+    clearInterval(uhr);
+    uhr = setInterval(() => {
+      rest--;
+      if (rest <= 0) { clearInterval(uhr); weiter(t); }
+      else $("#jetzt").textContent = "Eintragen (" + rest + ")";
+    }, 1000);
+  }
+
+  function starten() {
+    clearInterval(uhr);
+    $("#auswahl").hidden = true;
+    if (!SR) {
+      ersatzZeigen("Dieses Gerät erkennt hier keine Sprache. Tipp ins Feld und nimm das <b>Mikrofon der Tastatur</b>.");
+      $("#eingabe").focus();
+      return;
+    }
+    if (laeuft) { try { erkenner.stop(); } catch {} return; }
+    text = "";
+    erkenner = new SR();
+    erkenner.lang = "de-DE";
+    erkenner.interimResults = true;
+    erkenner.continuous = false;
+    erkenner.maxAlternatives = 1;
+    erkenner.onstart = () => { laeuft = true; $("#knopf").classList.add("hoert"); zeige("Ich höre …", ""); };
+    erkenner.onresult = (e) => {
+      let gesamt = "", endgueltig = true;
+      for (let i = 0; i < e.results.length; i++) { gesamt += e.results[i][0].transcript; if (!e.results[i].isFinal) endgueltig = false; }
+      text = gesamt;
+      zeige(endgueltig ? "Verstanden" : "Ich höre …", gesamt, !endgueltig);
+    };
+    erkenner.onerror = (e) => {
+      laeuft = false;
+      $("#knopf").classList.remove("hoert");
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        zeige("Mikrofon nicht erlaubt", "");
+        ersatzZeigen("Das iPhone hat das Mikrofon für diese Seite nicht freigegeben. Beim nächsten Tipp auf den Knopf <b>„Erlauben“</b> wählen – oder unten ins Feld tippen und das Mikrofon der Tastatur nehmen.");
+      } else if (e.error === "no-speech") {
+        zeige("Nichts gehört – nochmal tippen", "");
+      } else if (e.error !== "aborted") {
+        zeige("Spracherkennung gerade nicht da", "");
+        ersatzZeigen("Fehler „" + e.error + "“. Unten ins Feld tippen und das Mikrofon der Tastatur nehmen.");
+      }
+    };
+    erkenner.onend = () => { if (laeuft) fertig(); };
+    try { erkenner.start(); }
+    catch (err) { ersatzZeigen("Spracherkennung startet nicht. Unten ins Feld tippen und das Mikrofon der Tastatur nehmen."); }
+  }
+
+  $("#knopf").addEventListener("click", starten);
+  $("#nochmal").addEventListener("click", () => { clearInterval(uhr); starten(); });
+  $("#jetzt").addEventListener("click", () => { clearInterval(uhr); weiter(text); });
+  $("#senden").addEventListener("click", () => weiter($("#eingabe").value));
+  $("#eingabe").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); weiter($("#eingabe").value); } });
+  if (!SR) ersatzZeigen("Dieses Gerät erkennt hier keine Sprache. Tipp ins Feld und nimm das <b>Mikrofon der Tastatur</b>.");
+})();
+</script>
+</body>
+</html>
