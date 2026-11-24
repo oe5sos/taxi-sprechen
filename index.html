@@ -82,7 +82,7 @@ body {
     </div>
   </div>
 
-  <div class="fuss">Tippen, reden, kurz still sein – der Satz geht ins Tagebuch.</div>
+  <div class="fuss">Probe: Knopf tippen, einen Satz sagen, kurz still sein. Erscheint der Satz hier, funktioniert das Mikrofon.</div>
 </div>
 
 <script>
@@ -127,17 +127,10 @@ body {
     $("#knopf").classList.remove("hoert");
     const t = text.trim();
     if (!t) { zeige("Nichts verstanden – nochmal tippen", ""); return; }
-    zeige("Wird gleich eingetragen", "„" + t + "“");
+    // Probe-Modus: nur zeigen, was verstanden wurde, nichts weiterschicken.
+    zeige("Verstanden – das Mikrofon funktioniert", "„" + t + "“");
     $("#auswahl").hidden = false;
-    // Kurz Zeit zum Abbrechen, dann von selbst weiter
-    let rest = 3;
-    $("#jetzt").textContent = "Eintragen (" + rest + ")";
-    clearInterval(uhr);
-    uhr = setInterval(() => {
-      rest--;
-      if (rest <= 0) { clearInterval(uhr); weiter(t); }
-      else $("#jetzt").textContent = "Eintragen (" + rest + ")";
-    }, 1000);
+    $("#jetzt").hidden = true;
   }
 
   function starten() {
