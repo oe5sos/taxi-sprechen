@@ -203,7 +203,12 @@
           rec = new SR();
           rec.lang = "de-DE"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
           let schon = "", offen = "";
-          rec.onstart = () => { setze("listening"); ok(); };
+          const waechter = setTimeout(() => { // Safari antwortet gar nicht (kein Start, kein Fehler): nicht ewig „…“ zeigen
+            if (zustand !== "starting") return;
+            window.__sprachFehler = "keine Antwort"; const r0 = rec; rec = null; try { r0 && r0.abort(); } catch {}
+            setze("idle", "upstream_error"); nein({ code: "upstream_error" });
+          }, 6000);
+          rec.onstart = () => { clearTimeout(waechter); setze("listening"); ok(); };
           rec.onresult = (e) => {
             let fest = "", vor = "";
             for (let i = 0; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) fest += r[0].transcript; else vor += r[0].transcript; }
@@ -212,15 +217,18 @@
             teil.forEach((h) => h({ text: vor }));
           };
           rec.onerror = (e) => {
+            clearTimeout(waechter); window.__sprachFehler = e.error || "?";
             grund = e.error === "not-allowed" || e.error === "service-not-allowed" ? "not_granted" : (e.error === "no-speech" || e.error === "aborted") ? "stopped" : "upstream_error";
             if (zustand === "starting") nein({ code: grund });
           };
           rec.onend = () => {
+            clearTimeout(waechter);
+            if (zustand === "idle") return; // schon vom Wächter beendet
             // Safari liefert manchmal nur Zwischentext und endet ohne „fertig“-Ergebnis: den nicht verlieren.
             if (offen.trim()) { const t = offen; offen = ""; fertigT.forEach((h) => h({ text: t })); teil.forEach((h) => h({ text: "" })); }
             const r = grund || (stopFertig ? "stopped" : "ende"); grund = null; rec = null; setze("idle", r); if (stopFertig) { const f = stopFertig; stopFertig = null; f(); } };
           setze("starting");
-          try { rec.start(); } catch (x) { setze("idle", "upstream_error"); nein({ code: "upstream_error" }); }
+          try { rec.start(); } catch (x) { clearTimeout(waechter); window.__sprachFehler = String((x && x.name) || x); rec = null; setze("idle", "upstream_error"); nein({ code: "upstream_error" }); }
         });
       },
       stop() { return new Promise((ok) => { if (!rec) { ok(); return; } stopFertig = ok; setze("finishing"); try { rec.stop(); } catch { ok(); } }); },
@@ -231,6 +239,7 @@
     };
   }
 
+  window.__alsWebApp = navigator.standalone === true || !!(window.matchMedia && (matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches));
   const faehig = { db: Promise.resolve(db), assets: Promise.resolve(assets), downloads: Promise.resolve(downloads), dictation: Promise.resolve(sprechen()) };
   window.claude = { use: (name) => faehig[name] || Promise.resolve(null) };
 })();
@@ -1815,10 +1824,12 @@ Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
   // Mikrofon-Pille: mit Diktierfunktion direkt aufnehmen, am iPhone den Kurzbefehl starten, sonst die Tastatur öffnen.
   const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
   let hinweisTimer = null;
-  window.__mikrofonGesperrt = () => {
+  window.__mikrofonGesperrt = (grund) => {
     const h = $("#mic-hinweis");
-    h.innerHTML = "<b>Safari lässt das Mikrofon nicht zu.</b> Neben der Adresse auf „aA“ tippen → Website-Einstellungen → Mikrofon: <b>Erlauben</b>. Dann nochmal „Sprechen“." +
-      "<br><small>Bis dahin geht es über die Tastatur: ins Feld tippen, dort das Mikrofon nehmen.</small>";
+    const meldung = "<br><small>Meldung: " + esc(String(window.__sprachFehler || grund || "?")) + (window.__alsWebApp ? " · als Web-App geöffnet" : " · in Safari") + "</small>";
+    if (window.__alsWebApp) h.innerHTML = "<b>Dieses Symbol öffnet das Tagebuch als Web-App. Darin lässt Apple das Sprechen nicht zu.</b> Richtig ist das Symbol, das in Safari öffnet (mit Adresszeile). Dieses Symbol bitte löschen." + meldung;
+    else if (grund === "not_granted" || grund === "unavailable") h.innerHTML = "<b>Safari lässt das Mikrofon nicht zu.</b> Neben der Adresse auf „aA“ tippen → Website-Einstellungen → Mikrofon: <b>Erlauben</b>. Dann nochmal „Sprechen“." + meldung;
+    else h.innerHTML = "<b>Die Spracherkennung hat nicht geantwortet.</b> Bitte nochmal „Sprechen“ antippen." + meldung;
     h.hidden = false;
     clearTimeout(hinweisTimer);
     hinweisTimer = setTimeout(() => { h.hidden = true; }, 30000);
@@ -1830,7 +1841,7 @@ Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
     if (d) {
       ev.preventDefault(); // mit Diktierfunktion kein Fokus aufs Feld, keine Tastatur
       if (d.active()) { d.stop().then(() => eintragen()).catch(() => {}); return; }
-      d.start().catch((e) => { protokoll("diktat-fehler", { code: e?.code || null }); if (e?.code === "not_granted" || e?.code === "unavailable") window.__mikrofonGesperrt(); else melde("Sprechen ging gerade nicht. Bitte nochmal antippen."); });
+      d.start().catch((e) => { protokoll("diktat-fehler", { code: e?.code || null }); window.__mikrofonGesperrt(e?.code || "upstream_error"); });
       return;
     }
     const f = $("#eingabe");
@@ -1962,7 +1973,7 @@ Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
       $("#mic-text").textContent = state === "listening" ? "Fertig – eintragen" : state === "idle" ? "Sprechen" : "…";
       if (state === "listening") $("#mic-hinweis").hidden = true;
       if (!an && reason) protokoll("diktat-ende", { grund: reason });
-      if (!an && (reason === "not_granted" || reason === "unavailable")) window.__mikrofonGesperrt();
+      if (!an && (reason === "not_granted" || reason === "unavailable" || reason === "upstream_error")) window.__mikrofonGesperrt(reason);
       if (!an && reason === "ende" && $("#eingabe").value.trim()) eintragen();
     });
   });
