@@ -1,6 +1,6 @@
 # Taxi-Tagebuch
 
-Das Tagebuch als eigene Seite: „Sprechen“ antippen, reden, fertig.
-Die Spracherkennung läuft direkt hier im Browser (Safari am iPhone).
-Gespeichert wird in der Google-Tabelle des Besitzers, geschützt durch eine PIN.
-Die Seite selbst enthält keine Daten.
+„Sprechen“ antippen, reden, fertig: der Eintrag steht im Tagebuch.
+Die Spracherkennung läuft direkt hier im Browser (Safari am iPhone),
+gespeichert wird direkt im Handy. Eine Sicherung nach Google läuft still
+im Hintergrund, wenn sie eingerichtet ist. Die Seite selbst enthält keine Daten.

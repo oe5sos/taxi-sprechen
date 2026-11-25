@@ -24,51 +24,46 @@
     return j;
   }
 
-  // ---------- PIN einmal abfragen ----------
-  const pinBereit = new Promise((fertig) => {
-    async function pruefen(p) { pin = p; try { await ruf({ aktion: "pruefen" }); return true; } catch (e) { return e && e.code === "pin" ? false : null; } }
-    async function los() {
-      if (pin) { const ok = await pruefen(pin); if (ok !== false) { fertig(); return; } }
-      const box = document.createElement("div");
-      box.style.cssText = "position:fixed;inset:0;z-index:50;background:var(--bg,#0f0e0c);display:flex;align-items:center;justify-content:center;padding:24px";
-      box.innerHTML = '<form style="width:100%;max-width:360px;display:grid;gap:14px;text-align:center;font:600 18px Barlow,system-ui,sans-serif;color:var(--ink,#f1ece2)">' +
-        '<div style="font-size:22px">Taxi-Tagebuch</div><label for="tb-pin">PIN eingeben (einmalig)</label>' +
-        '<input id="tb-pin" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="font:700 28px system-ui;text-align:center;letter-spacing:.3em;padding:12px;border-radius:12px;border:2px solid #f5b400;background:transparent;color:inherit">' +
-        '<button style="min-height:52px;border:0;border-radius:14px;background:#f5b400;color:#15120d;font:700 18px system-ui">Weiter</button><div id="tb-pin-fehler" style="color:#e3a64e;min-height:1.2em"></div></form>';
-      document.body.appendChild(box);
-      box.querySelector("form").addEventListener("submit", async (ev) => {
-        ev.preventDefault();
-        const p = box.querySelector("#tb-pin").value.trim();
-        box.querySelector("#tb-pin-fehler").textContent = "Prüfe …";
-        const ok = await pruefen(p);
-        if (ok) { try { localStorage.setItem("tb-pin", p); } catch {} box.remove(); fertig(); }
-        else box.querySelector("#tb-pin-fehler").textContent = ok === false ? "PIN stimmt nicht." : "Keine Verbindung. Bitte nochmal.";
-      });
-      box.querySelector("#tb-pin").focus();
+  // ---------- Speicher: direkt im Handy (sofort, auch ohne Netz) ----------
+  const VOR = "tb:";
+  const schluessel = (coll, id) => VOR + coll + "/" + id;
+  const lese = (coll, id) => { try { const s = localStorage.getItem(schluessel(coll, id)); return s ? JSON.parse(s) : null; } catch { return null; } };
+  const legeAb = (coll, id, d) => localStorage.setItem(schluessel(coll, id), JSON.stringify(d)); // wirft bei vollem Speicher → „Nicht gespeichert“
+  const alle = (coll) => {
+    const out = [], v = VOR + coll + "/";
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(v)) { try { out.push([k.slice(v.length), JSON.parse(localStorage.getItem(k))]); } catch {} }
     }
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", los); else los();
-  });
+    return out.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  };
+  function passt(d, [f, op, v]) {
+    const x = d ? d[f] : undefined;
+    if (op === "==") return x === v;
+    if (op === "!=") return x !== v;
+    if (op === "in") return (v || []).includes(x);
+    if (x === undefined || x === null) return false;
+    return op === ">=" ? x >= v : op === ">" ? x > v : op === "<=" ? x <= v : op === "<" ? x < v : true;
+  }
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
 
-  // ---------- Speicher: Google-Tabelle über die Web-App ----------
   const lauscher = new Set();
   const anstossen = () => setTimeout(() => lauscher.forEach((f) => f()), 0);
   const kopie = (d) => (d ? JSON.parse(JSON.stringify(d)) : undefined);
   const snapDoc = (id, exists, daten) => ({ id, exists, data: () => kopie(daten), metadata: { fromCache: false, hasPendingWrites: false } });
-  const leer = () => ({ docs: [], size: 0, empty: true, metadata: { fromCache: false }, docChanges: () => [] });
 
   function doc(pfad) {
     const teile = pfad.split("/"), coll = teile[0], id = teile[1], aktiv = SAMMLUNGEN.includes(coll);
     const d = {
       id, path: pfad,
-      async get() { if (!aktiv) return snapDoc(id, false); const j = await ruf({ aktion: "get", sammlung: coll, id }); return snapDoc(id, j.exists, j.daten); },
-      async set(daten) { if (!aktiv) return; await ruf({ aktion: "set", sammlung: coll, id, daten }); anstossen(); },
-      async update(teil) { if (!aktiv) return; const s = await d.get(); if (!s.exists) throw { code: "invalid_argument" }; await d.set(Object.assign(s.data(), teil)); },
-      async delete() { if (!aktiv) return; await ruf({ aktion: "delete", sammlung: coll, id }); anstossen(); },
-      onSnapshot(next, fehler) {
-        if (!aktiv) { setTimeout(() => next(snapDoc(id, false)), 0); return () => {}; }
+      async get() { if (!aktiv) return snapDoc(id, false); const x = lese(coll, id); return snapDoc(id, !!x, x); },
+      async set(daten) { if (!aktiv) return; legeAb(coll, id, kopie(daten)); merke({ aktion: "set", sammlung: coll, id }); anstossen(); },
+      async update(teil) { if (!aktiv) return; const x = lese(coll, id); if (!x) throw { code: "invalid_argument" }; await d.set(Object.assign(x, teil)); },
+      async delete() { if (!aktiv) return; localStorage.removeItem(schluessel(coll, id)); merke({ aktion: "delete", sammlung: coll, id }); anstossen(); },
+      onSnapshot(next) {
         let tot = false;
-        const f = async () => { try { const s = await d.get(); if (!tot) next(s); } catch (e) { /* nächster Abgleich versucht es wieder */ } };
-        lauscher.add(f); f();
+        const f = () => { if (!tot) d.get().then((s) => { if (!tot) next(s); }); };
+        lauscher.add(f); setTimeout(f, 0);
         return () => { tot = true; lauscher.delete(f); };
       },
       collection: () => { throw new Error("nicht unterstützt"); },
@@ -78,9 +73,7 @@
   function abfrage(coll, where, grenze) {
     const aktiv = SAMMLUNGEN.includes(coll);
     const lauf = async () => {
-      if (!aktiv) return leer();
-      const j = await ruf({ aktion: "query", sammlung: coll, where });
-      const docs = j.docs.slice(0, grenze).map((x) => snapDoc(x.id, true, x.daten));
+      const docs = (aktiv ? alle(coll) : []).filter(([, x]) => where.every((w) => passt(x, w))).slice(0, grenze).map(([i, x]) => snapDoc(i, true, x));
       return { docs, size: docs.length, empty: !docs.length, metadata: { fromCache: false }, docChanges: () => [] };
     };
     return {
@@ -90,38 +83,100 @@
       get: lauf,
       onSnapshot(next) {
         let tot = false;
-        const f = async () => { try { const s = await lauf(); if (!tot) next(s); } catch (e) {} };
-        lauscher.add(f); f();
+        const f = () => { if (!tot) lauf().then((s) => { if (!tot) next(s); }); };
+        lauscher.add(f); setTimeout(f, 0);
         return () => { tot = true; lauscher.delete(f); };
       },
       doc: (i) => doc(coll + "/" + (i || Math.random().toString(36).slice(2))),
       add: async (daten) => { const r = doc(coll + "/" + Math.random().toString(36).slice(2)); await r.set(daten); return r; },
     };
   }
-  setInterval(() => { if (document.visibilityState === "visible") anstossen(); }, 30000);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") anstossen(); });
   const db = { doc, collection: (c) => abfrage(c, [], 1000) };
 
-  // ---------- Belege: Google Drive ----------
-  const belegCache = new Map();
+  // ---------- Belege: Fotos ebenfalls im Handy (IndexedDB) ----------
+  let idbOffen = null;
+  const idb = () => idbOffen || (idbOffen = new Promise((ok, nein) => {
+    const r = indexedDB.open("taxi-tagebuch", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("belege");
+    r.onsuccess = () => ok(r.result); r.onerror = () => nein(r.error);
+  }));
+  async function belegAblage(modus, f) {
+    const d = await idb();
+    return new Promise((ok, nein) => { const t = d.transaction("belege", modus); const r = f(t.objectStore("belege")); t.oncomplete = () => ok(r && r.result); t.onerror = () => nein(t.error); });
+  }
   function blobZuBase64(blob) {
     return new Promise((ok, nein) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = nein; r.readAsDataURL(blob); });
   }
   const assets = {
-    async upload(blob, o) {
-      const j = await ruf({ aktion: "beleg_speichern", name: "Beleg " + new Date().toISOString().slice(0, 19).replace("T", " ") + ".jpg", mime: (o && o.type) || blob.type || "image/jpeg", base64: await blobZuBase64(blob) });
-      belegCache.set(j.id, blob);
-      return { id: j.id, url: "", sizeBytes: blob.size, contentType: "image/jpeg" };
+    async upload(blob) {
+      const id = "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      await belegAblage("readwrite", (s) => s.put(blob, id));
+      merke({ aktion: "beleg", id });
+      return { id, url: "", sizeBytes: blob.size, contentType: "image/jpeg" };
     },
   };
   window.__belegHolen = async (id) => {
-    if (belegCache.has(id)) return belegCache.get(id);
-    const j = await ruf({ aktion: "beleg_holen", id });
-    const bytes = Uint8Array.from(atob(j.base64), (c) => c.charCodeAt(0));
-    const b = new Blob([bytes], { type: j.mime || "image/jpeg" });
-    belegCache.set(id, b);
-    return b;
+    const b = await belegAblage("readonly", (s) => s.get(id));
+    if (b) return b;
+    const j = await ruf({ aktion: "beleg_holen", id }); // ältere Belege aus Google Drive
+    return new Blob([Uint8Array.from(atob(j.base64), (c) => c.charCodeAt(0))], { type: j.mime || "image/jpeg" });
   };
+
+  // ---------- Sicherung nach Google: still im Hintergrund, nur wenn eingerichtet ----------
+  const WS = "tb-warteschlange";
+  const schlange = () => { try { return JSON.parse(localStorage.getItem(WS) || "[]"); } catch { return []; } };
+  const schlangeSchreiben = (q) => { try { localStorage.setItem(WS, JSON.stringify(q)); } catch {} };
+  let inArbeit = null;
+  function merke(op) {
+    const q = schlange();
+    if (op.aktion !== "beleg" && q.some((x) => x.aktion === op.aktion && x.sammlung === op.sammlung && x.id === op.id && x.n !== inArbeit)) return; // liest beim Senden ohnehin den neuesten Stand
+    op.n = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    q.push(op); schlangeSchreiben(q);
+    setTimeout(abgleich, 800);
+  }
+  let laeuft = false;
+  async function abgleich() {
+    if (!pin || laeuft || navigator.onLine === false) return;
+    laeuft = true;
+    try {
+      for (let runde = 0; runde < 200; runde++) {
+        const op = schlange()[0];
+        if (!op) break;
+        inArbeit = op.n;
+        if (op.aktion === "set") {
+          const x = lese(op.sammlung, op.id);
+          if (x) {
+            const j = await ruf({ aktion: "set", sammlung: op.sammlung, id: op.id, daten: x });
+            if (op.sammlung === "termine" && j.daten) {
+              const l = lese("termine", op.id);
+              if (l) { for (const k of ["kalender_uid", "sync", "kalender_fehler"]) if (k in j.daten) l[k] = j.daten[k]; legeAb("termine", op.id, l); anstossen(); }
+            }
+          }
+        } else if (op.aktion === "delete") {
+          await ruf({ aktion: "delete", sammlung: op.sammlung, id: op.id });
+        } else if (op.aktion === "beleg") {
+          const b = await belegAblage("readonly", (s) => s.get(op.id));
+          if (b) await ruf({ aktion: "beleg_speichern", name: "Beleg " + op.id + ".jpg", mime: b.type || "image/jpeg", base64: await blobZuBase64(b) });
+        }
+        schlangeSchreiben(schlange().filter((x) => x.n !== op.n));
+      }
+    } catch (e) { /* Google nicht erreichbar oder noch nicht freigegeben: bleibt in der Warteschlange */ }
+    finally { inArbeit = null; laeuft = false; }
+  }
+  window.__abgleichAn = () => !!pin;
+  setInterval(() => { if (document.visibilityState === "visible") abgleich(); }, 60000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { anstossen(); abgleich(); } });
+  window.addEventListener("online", abgleich);
+  setTimeout(abgleich, 3000);
+  // PIN für die Sicherung: einmal auf die Zustandszeile unten tippen (stört sonst nirgends)
+  document.addEventListener("click", (ev) => {
+    if (!ev.target.closest || !ev.target.closest("#zustand")) return;
+    const p = prompt("PIN für die Sicherung in Google (nur einmal nötig)", pin || "");
+    if (p === null) return;
+    pin = p.trim() || null;
+    try { pin ? localStorage.setItem("tb-pin", pin) : localStorage.removeItem("tb-pin"); } catch {}
+    if (pin) { const q = schlange(); for (const [i] of alle("tage")) q.push({ aktion: "set", sammlung: "tage", id: i, n: "a" + i }); for (const [i] of alle("termine")) q.push({ aktion: "set", sammlung: "termine", id: i, n: "t" + i }); schlangeSchreiben(q); abgleich(); }
+  });
 
   // ---------- Dateien speichern: normaler Download ----------
   const downloads = {
@@ -176,7 +231,7 @@
     };
   }
 
-  const faehig = { db: pinBereit.then(() => db), assets: pinBereit.then(() => assets), downloads: Promise.resolve(downloads), dictation: Promise.resolve(sprechen()) };
+  const faehig = { db: Promise.resolve(db), assets: Promise.resolve(assets), downloads: Promise.resolve(downloads), dictation: Promise.resolve(sprechen()) };
   window.claude = { use: (name) => faehig[name] || Promise.resolve(null) };
 })();
 </script>
@@ -460,7 +515,7 @@ td.text { white-space: normal; text-align: left; min-width: 180px; }
           <li>„Vom Bahnhof nach Altmünster, 9 Kilometer, 18 Euro bar, 2 Euro Trinkgeld“</li>
           <li>„Getankt, 48 Liter, 79 Euro, km-Stand 84.400“</li>
           <li>„Service beim Mercedes, 380 Euro, Überweisung“ · „Handyhalterung gekauft, 24 Euro“</li>
-          <li>Knopf „Beleg“: Tankbeleg oder Rechnung fotografieren, Betrag, Liter und Datum werden ausgelesen</li>
+          <li>Knopf „Beleg“: Tankbeleg oder Rechnung fotografieren, das Foto wird im Tagebuch abgelegt</li>
           <li>„Vorkommnis: Fahrgast hat Schirm liegen gelassen“</li>
           <li>„Termin morgen 5 Uhr Flughafen Salzburg abholen, Erinnerung am Vorabend und eine Stunde vorher“</li>
           <li>„Die letzte Fahrt war 22 Euro“ · „Letzten Eintrag löschen“ · „Termin morgen auf 6 Uhr verschieben“</li>
@@ -753,7 +808,12 @@ td.text { white-space: normal; text-align: left; min-width: 180px; }
     return "Notiz: " + (e.text || "");
   }
 
+  // „… 38 Liter, Ende“: das gesprochene „Ende“ schließt nur die Ansage ab (nicht „Schicht Ende“ / „Tag Ende“).
+  function ohneSchlusswort(text) {
+    return text.replace(/[\s,.;:!-]+(ende)[\s.!]*$/i, (m, w, off) => (/\b(schicht|dienst|tag|tages|arbeit|arbeits)\s*$/i.test(text.slice(0, off)) ? m : ""));
+  }
   function lokalVerstehen(text) {
+    text = ohneSchlusswort(text);
     const t = text.toLowerCase();
     const letzter = (S.tag?.eintraege || []).at(-1);
     if (/(letzt\w*|vorig\w*).{0,20}(lösch|streich|weg)|(lösch|streich)\w*.{0,20}(letzt|vorig)/.test(t)) {
@@ -1264,7 +1324,7 @@ Regeln:
       const bald = x.zeit ? start - jetzt <= vorher * 60000 && start - jetzt > -3600000 : x.datum === S.heute;
       if (bald && !faellig) faellig = x;
       const tagWort = x.datum === S.heute ? "heute" : x.datum === plusTage(S.heute, 1) ? "morgen" : datumKurz(x.datum);
-      const status = x.sync === "ok" ? '<span class="status ok">im Kalender</span>' : x.sync === "fehler" ? '<span class="status fehler">Kalender-Fehler, bitte ändern</span>' : '<span class="status warte">kommt in den Kalender</span>';
+      const status = x.sync === "ok" ? '<span class="status ok">im Kalender</span>' : x.sync === "fehler" ? '<span class="status fehler">Kalender-Fehler, bitte ändern</span>' : (window.__abgleichAn && window.__abgleichAn() ? '<span class="status warte">kommt in den Kalender</span>' : '<span class="status ok">im Tagebuch</span>');
       const info = [x.ort, (x.erinnerungen || []).map(erinnerText).join(", ")].filter(Boolean).map(esc);
       const offen = S.offenAuf === x.id;
       return '<li data-id="' + esc(x.id) + '"><button type="button" class="termin' + (bald ? " bald" : "") + '" aria-expanded="' + offen + '">' +
@@ -1754,7 +1814,6 @@ Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
   $("#beleg-knopf").addEventListener("click", () => $("#beleg-datei").click());
   // Mikrofon-Pille: mit Diktierfunktion direkt aufnehmen, am iPhone den Kurzbefehl starten, sonst die Tastatur öffnen.
   const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  const SPRACH_SITZUNG = "https://oe5sos.github.io/taxi-sprechen/"; // Sprech-Probe außerhalb von claude.ai (24.11.)
   let hinweisTimer = null;
   window.__mikrofonGesperrt = () => {
     const h = $("#mic-hinweis");
@@ -1888,7 +1947,14 @@ Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
     S.dict = d;
     const mic = $("#mic"), feld = $("#eingabe");
     $("#schritte").innerHTML = "<li><b>1</b>„Sprechen“ antippen</li><li><b>2</b>reden</li><li><b>3</b>nochmal antippen, fertig</li>";
-    d.onPartial(({ text }) => { $("#vorlaeufig").textContent = text; });
+    d.onPartial(({ text }) => {
+      $("#vorlaeufig").textContent = text;
+      const t = (text || "").trim();
+      if (!S.endeWort && d.active() && /[\s,.]ende[.!]?$/i.test(t) && !/\b(schicht|dienst|tag|tages|arbeit|arbeits)\s+ende[.!]?$/i.test(t)) {
+        S.endeWort = true;
+        d.stop().then(() => eintragen()).catch(() => {}).finally(() => { S.endeWort = false; });
+      }
+    });
     d.onFinal(({ text }) => { feld.value = feld.value ? feld.value + text : text.replace(/^\s+/, ""); $("#vorlaeufig").textContent = ""; });
     d.onState(({ state, reason }) => {
       const an = state !== "idle";
