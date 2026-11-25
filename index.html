@@ -12,6 +12,22 @@
 /* Eigene Fähigkeiten statt claude.ai: dieselbe Schnittstelle (claude.use), andere Dienste dahinter. */
 (() => {
   "use strict";
+  // Immer die neueste Fassung: GitHub Pages lässt die Seite bis zu 10 min im Zwischenspeicher (25.11.).
+  const BAU = "f419e1e0fa";
+  function neuesteFassung() {
+    try {
+      fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then((r) => r.json()).then((j) => {
+        if (!j || !j.bau || j.bau === BAU) return;
+        const feld = document.getElementById("eingabe");
+        if (feld && feld.value.trim()) return; // nie mitten in einer Eingabe neu laden
+        const k = "tb-neu-" + j.bau;
+        try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, "1"); } catch {} // keine Schleife
+        location.replace(location.pathname + "?v=" + j.bau + location.hash);
+      }).catch(() => {});
+    } catch {}
+  }
+  neuesteFassung();
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") neuesteFassung(); });
   const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzlzi4_Zy_1XhVZ6RqwKYWGsoZsd76a3Su5p6fkBs4o4ERwRwQHxy6TZIPJTKaTi0bj/exec";
   const SAMMLUNGEN = ["tage", "termine", "monate"];
   let pin = null;
@@ -660,7 +676,7 @@ td.text { white-space: normal; text-align: left; min-width: 180px; }
   const ZAHLART_NAME = { bar: "bar", karte: "Karte", rechnung: "Rechnung", "überweisung": "Überweisung" };
 
   /* ---------- Ablaufprotokoll (nur Abläufe, keine gesprochenen Inhalte) ---------- */
-  const FASSUNG = "App 1";
+  const FASSUNG = "App 25.11. 10:14";
   const D = {
     id: "d-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), fassung: FASSUNG, start: new Date().toISOString(),
     ua: navigator.userAgent, vollbild: !!navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches),
