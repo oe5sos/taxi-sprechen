@@ -1836,7 +1836,7 @@ Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
     setTimeout(() => protokoll("mic-danach", { fokus: document.activeElement?.id || document.activeElement?.tagName || null, sichtHoehe: Math.round(window.visualViewport?.height || 0), hoehe: innerHeight }), 600);
     if (d) {
       ev.preventDefault(); // mit Diktierfunktion kein Fokus aufs Feld, keine Tastatur
-      if (d.active()) { d.stop().then(() => eintragen()).catch(() => {}); return; }
+      if (d.active()) { d.stop().catch(() => {}); return; }
       d.start().catch((e) => { protokoll("diktat-fehler", { code: e?.code || null }); window.__mikrofonGesperrt(e?.code || "upstream_error"); });
       return;
     }
@@ -1954,25 +1954,24 @@ Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
     if (!d) return;
     S.dict = d;
     const mic = $("#mic"), feld = $("#eingabe");
-    $("#schritte").innerHTML = "<li><b>1</b>„Sprechen“ antippen</li><li><b>2</b>reden</li><li><b>3</b>nochmal antippen, fertig</li>";
+    $("#schritte").innerHTML = "<li><b>1</b>„Sprechen“ antippen</li><li><b>2</b>reden</li><li><b>3</b>prüfen, dann „Eintragen“</li>";
     d.onPartial(({ text }) => {
       feld.value = (S.festText ? S.festText + " " : "") + (text || "");
       const t = (text || "").trim();
       if (!S.endeWort && d.active() && /[\s,.]ende[.!]?$/i.test(t) && !/\b(schicht|dienst|tag|tages|arbeit|arbeits)\s+ende[.!]?$/i.test(t)) {
         S.endeWort = true;
-        d.stop().then(() => eintragen()).catch(() => {}).finally(() => { S.endeWort = false; });
+        d.stop().then(() => { feld.value = feld.value.replace(/[\s,.;:!-]+ende[\s.!]*$/i, ""); S.festText = feld.value; }).catch(() => {}).finally(() => { S.endeWort = false; });
       }
     });
     d.onFinal(({ text }) => { const t = String(text || "").trim(); if (t) S.festText = (S.festText ? S.festText + " " : "") + t; feld.value = S.festText || ""; $("#vorlaeufig").textContent = ""; });
     d.onState(({ state, reason }) => {
       const an = state !== "idle";
       mic.setAttribute("aria-pressed", String(an));
-      $("#mic-text").textContent = state === "listening" ? "Fertig – eintragen" : state === "idle" ? "Sprechen" : "…";
+      $("#mic-text").textContent = state === "listening" ? "Fertig" : state === "idle" ? "Sprechen" : "…";
       if (state === "listening") $("#mic-hinweis").hidden = true;
       if (state === "starting") S.festText = $("#eingabe").value.trim();
       if (!an && reason) protokoll("diktat-ende", { grund: reason });
       if (!an && (reason === "not_granted" || reason === "unavailable" || reason === "upstream_error")) window.__mikrofonGesperrt(reason);
-      if (!an && reason === "ende" && $("#eingabe").value.trim()) eintragen();
     });
   });
 })();
