@@ -240,7 +240,7 @@
   }
 
   window.__alsWebApp = navigator.standalone === true || !!(window.matchMedia && (matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches));
-  const faehig = { db: Promise.resolve(db), assets: Promise.resolve(assets), downloads: Promise.resolve(downloads), dictation: Promise.resolve(sprechen()) };
+  const faehig = { db: Promise.resolve(db), assets: Promise.resolve(assets), downloads: Promise.resolve(downloads), dictation: Promise.resolve(window.__alsWebApp ? null : sprechen()) };
   window.claude = { use: (name) => faehig[name] || Promise.resolve(null) };
 })();
 </script>
@@ -1824,12 +1824,12 @@ Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
   // Mikrofon-Pille: mit Diktierfunktion direkt aufnehmen, am iPhone den Kurzbefehl starten, sonst die Tastatur öffnen.
   const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
   let hinweisTimer = null;
+  window.__hinweisTastatur = $("#mic-hinweis").innerHTML;
   window.__mikrofonGesperrt = (grund) => {
+    S.dict = null; zeigeZustand(); // ab jetzt öffnet „Sprechen“ die Tastatur mit ihrem Mikrofon
     const h = $("#mic-hinweis");
-    const meldung = "<br><small>Meldung: " + esc(String(window.__sprachFehler || grund || "?")) + (window.__alsWebApp ? " · als Web-App geöffnet" : " · in Safari") + "</small>";
-    if (window.__alsWebApp) h.innerHTML = "<b>Dieses Symbol öffnet das Tagebuch als Web-App. Darin lässt Apple das Sprechen nicht zu.</b> Richtig ist das Symbol, das in Safari öffnet (mit Adresszeile). Dieses Symbol bitte löschen." + meldung;
-    else if (grund === "not_granted" || grund === "unavailable") h.innerHTML = "<b>Safari lässt das Mikrofon nicht zu.</b> Neben der Adresse auf „aA“ tippen → Website-Einstellungen → Mikrofon: <b>Erlauben</b>. Dann nochmal „Sprechen“." + meldung;
-    else h.innerHTML = "<b>Die Spracherkennung hat nicht geantwortet.</b> Bitte nochmal „Sprechen“ antippen." + meldung;
+    h.innerHTML = "<b>Safaris Spracherkennung ging hier nicht.</b> Nochmal „Sprechen“ antippen: dann über das <b>Mikrofon der Tastatur</b> sprechen und „Senden“." +
+      "<br><small>Meldung: " + esc(String(window.__sprachFehler || grund || "?")) + (window.__alsWebApp ? " · Web-App" : " · Safari") + "</small>";
     h.hidden = false;
     clearTimeout(hinweisTimer);
     hinweisTimer = setTimeout(() => { h.hidden = true; }, 30000);
@@ -1848,9 +1848,10 @@ Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
     f.focus();
     try { f.setSelectionRange(f.value.length, f.value.length); } catch {}
     const h = $("#mic-hinweis");
+    if (window.__hinweisTastatur) h.innerHTML = window.__hinweisTastatur;
     h.hidden = false;
     clearTimeout(hinweisTimer);
-    hinweisTimer = setTimeout(() => { h.hidden = true; }, 12000);
+    hinweisTimer = setTimeout(() => { h.hidden = true; }, 20000);
   });
   let eingabenGemeldet = 0;
   $("#eingabe").addEventListener("input", (ev) => {
