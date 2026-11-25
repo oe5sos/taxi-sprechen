@@ -3,183 +3,1905 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Taxi-Tagebuch – Sprechen</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-title" content="Tagebuch">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="favicon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&display=swap">
-<style>
-/* Ein großer Knopf: tippen, reden, der Satz geht ins Tagebuch. Farben wie das Tagebuch (Fahne #f5b400, Tinte #15120d). */
-:root {
-  --bg: #f2f2ee; --surface: #ffffff; --ink: #15120d; --muted: #625d53; --line: #dcd9d0;
-  --amber: #f5b400; --on-amber: #15120d; --amber-soft: #fbedc4; --warn: #8f5500;
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #0f0e0c; --surface: #1a1815; --ink: #f1ece2; --muted: #a59d8e; --line: #2f2b25; --amber-soft: #3a2f12; --warn: #e3a64e; color-scheme: dark; }
-}
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html, body { height: 100%; }
-body {
-  margin: 0; background: var(--bg); color: var(--ink);
-  font: 500 18px/1.45 "Barlow", system-ui, -apple-system, sans-serif;
-  padding: env(safe-area-inset-top, 0) max(16px, env(safe-area-inset-right, 0)) env(safe-area-inset-bottom, 0) max(16px, env(safe-area-inset-left, 0));
-  -webkit-text-size-adjust: 100%;
-}
-.wrap { max-width: 520px; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; padding-block: 20px 28px; }
-.kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.marke { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; }
-.fahne { width: 34px; height: 22px; border-radius: 4px; background: var(--amber); color: var(--on-amber); display: grid; place-items: center; font: 700 11px/1 "Barlow", sans-serif; letter-spacing: .08em; }
-.ansehen { color: var(--ink); font-weight: 600; font-size: 16px; text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; background: var(--surface); }
-.mitte { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center; }
-#knopf {
-  width: min(62vw, 240px); aspect-ratio: 1; border-radius: 50%; border: 0;
-  background: var(--amber); color: var(--on-amber); display: grid; place-items: center; cursor: pointer;
-  box-shadow: 0 10px 30px rgba(0,0,0,.22); -webkit-tap-highlight-color: transparent; touch-action: manipulation;
-}
-#knopf svg { width: 42%; height: 42%; }
-#knopf.hoert { background: var(--ink); color: var(--amber); }
-@media (prefers-reduced-motion: no-preference) { #knopf.hoert { animation: puls 1.2s ease-in-out infinite; } }
-@keyframes puls { 50% { box-shadow: 0 0 0 18px rgba(245,180,0,.25), 0 10px 30px rgba(0,0,0,.22); } }
-#knopf:focus-visible { outline: 4px solid var(--ink); outline-offset: 6px; }
-.zustand { font-size: 22px; font-weight: 700; min-height: 1.4em; }
-.text { font-size: 20px; min-height: 2.8em; max-width: 30ch; overflow-wrap: anywhere; color: var(--ink); }
-.text.vorlaeufig { color: var(--muted); font-style: italic; }
-.reihe { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-.knopf2 { min-height: 50px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); padding: 0 20px; font: 600 18px/1 "Barlow", sans-serif; color: var(--ink); cursor: pointer; }
-.knopf2.haupt { background: var(--amber); border-color: transparent; color: var(--on-amber); }
-.hinweis { background: var(--amber-soft); border-radius: 14px; padding: 12px 14px; font-size: 16px; text-align: left; }
-.ersatz { width: 100%; display: grid; gap: 10px; }
-.ersatz textarea { width: 100%; min-height: 110px; border: 2px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); padding: 12px; font: 500 19px/1.4 "Barlow", sans-serif; }
-.fuss { text-align: center; font-size: 13px; color: var(--muted); }
-</style>
+<title>Taxi-Tagebuch</title>
+<script>
+/* Eigene Fähigkeiten statt claude.ai: dieselbe Schnittstelle (claude.use), andere Dienste dahinter. */
+(() => {
+  "use strict";
+  const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzlzi4_Zy_1XhVZ6RqwKYWGsoZsd76a3Su5p6fkBs4o4ERwRwQHxy6TZIPJTKaTi0bj/exec";
+  const SAMMLUNGEN = ["tage", "termine", "monate"];
+  let pin = null;
+  try { pin = localStorage.getItem("tb-pin"); } catch {}
+
+  async function ruf(a) {
+    const r = await fetch(GOOGLE_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(Object.assign({}, a, { pin })), redirect: "follow" });
+    const j = await r.json();
+    if (!j.ok) throw { code: j.fehler === "pin" ? "pin" : "unavailable", message: j.fehler };
+    return j;
+  }
+
+  // ---------- PIN einmal abfragen ----------
+  const pinBereit = new Promise((fertig) => {
+    async function pruefen(p) { pin = p; try { await ruf({ aktion: "pruefen" }); return true; } catch (e) { return e && e.code === "pin" ? false : null; } }
+    async function los() {
+      if (pin) { const ok = await pruefen(pin); if (ok !== false) { fertig(); return; } }
+      const box = document.createElement("div");
+      box.style.cssText = "position:fixed;inset:0;z-index:50;background:var(--bg,#0f0e0c);display:flex;align-items:center;justify-content:center;padding:24px";
+      box.innerHTML = '<form style="width:100%;max-width:360px;display:grid;gap:14px;text-align:center;font:600 18px Barlow,system-ui,sans-serif;color:var(--ink,#f1ece2)">' +
+        '<div style="font-size:22px">Taxi-Tagebuch</div><label for="tb-pin">PIN eingeben (einmalig)</label>' +
+        '<input id="tb-pin" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="font:700 28px system-ui;text-align:center;letter-spacing:.3em;padding:12px;border-radius:12px;border:2px solid #f5b400;background:transparent;color:inherit">' +
+        '<button style="min-height:52px;border:0;border-radius:14px;background:#f5b400;color:#15120d;font:700 18px system-ui">Weiter</button><div id="tb-pin-fehler" style="color:#e3a64e;min-height:1.2em"></div></form>';
+      document.body.appendChild(box);
+      box.querySelector("form").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const p = box.querySelector("#tb-pin").value.trim();
+        box.querySelector("#tb-pin-fehler").textContent = "Prüfe …";
+        const ok = await pruefen(p);
+        if (ok) { try { localStorage.setItem("tb-pin", p); } catch {} box.remove(); fertig(); }
+        else box.querySelector("#tb-pin-fehler").textContent = ok === false ? "PIN stimmt nicht." : "Keine Verbindung. Bitte nochmal.";
+      });
+      box.querySelector("#tb-pin").focus();
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", los); else los();
+  });
+
+  // ---------- Speicher: Google-Tabelle über die Web-App ----------
+  const lauscher = new Set();
+  const anstossen = () => setTimeout(() => lauscher.forEach((f) => f()), 0);
+  const kopie = (d) => (d ? JSON.parse(JSON.stringify(d)) : undefined);
+  const snapDoc = (id, exists, daten) => ({ id, exists, data: () => kopie(daten), metadata: { fromCache: false, hasPendingWrites: false } });
+  const leer = () => ({ docs: [], size: 0, empty: true, metadata: { fromCache: false }, docChanges: () => [] });
+
+  function doc(pfad) {
+    const teile = pfad.split("/"), coll = teile[0], id = teile[1], aktiv = SAMMLUNGEN.includes(coll);
+    const d = {
+      id, path: pfad,
+      async get() { if (!aktiv) return snapDoc(id, false); const j = await ruf({ aktion: "get", sammlung: coll, id }); return snapDoc(id, j.exists, j.daten); },
+      async set(daten) { if (!aktiv) return; await ruf({ aktion: "set", sammlung: coll, id, daten }); anstossen(); },
+      async update(teil) { if (!aktiv) return; const s = await d.get(); if (!s.exists) throw { code: "invalid_argument" }; await d.set(Object.assign(s.data(), teil)); },
+      async delete() { if (!aktiv) return; await ruf({ aktion: "delete", sammlung: coll, id }); anstossen(); },
+      onSnapshot(next, fehler) {
+        if (!aktiv) { setTimeout(() => next(snapDoc(id, false)), 0); return () => {}; }
+        let tot = false;
+        const f = async () => { try { const s = await d.get(); if (!tot) next(s); } catch (e) { /* nächster Abgleich versucht es wieder */ } };
+        lauscher.add(f); f();
+        return () => { tot = true; lauscher.delete(f); };
+      },
+      collection: () => { throw new Error("nicht unterstützt"); },
+    };
+    return d;
+  }
+  function abfrage(coll, where, grenze) {
+    const aktiv = SAMMLUNGEN.includes(coll);
+    const lauf = async () => {
+      if (!aktiv) return leer();
+      const j = await ruf({ aktion: "query", sammlung: coll, where });
+      const docs = j.docs.slice(0, grenze).map((x) => snapDoc(x.id, true, x.daten));
+      return { docs, size: docs.length, empty: !docs.length, metadata: { fromCache: false }, docChanges: () => [] };
+    };
+    return {
+      where: (f, op, v) => abfrage(coll, where.concat([[f, op, v]]), grenze),
+      orderBy: () => abfrage(coll, where, grenze),
+      limit: (n) => abfrage(coll, where, n),
+      get: lauf,
+      onSnapshot(next) {
+        let tot = false;
+        const f = async () => { try { const s = await lauf(); if (!tot) next(s); } catch (e) {} };
+        lauscher.add(f); f();
+        return () => { tot = true; lauscher.delete(f); };
+      },
+      doc: (i) => doc(coll + "/" + (i || Math.random().toString(36).slice(2))),
+      add: async (daten) => { const r = doc(coll + "/" + Math.random().toString(36).slice(2)); await r.set(daten); return r; },
+    };
+  }
+  setInterval(() => { if (document.visibilityState === "visible") anstossen(); }, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") anstossen(); });
+  const db = { doc, collection: (c) => abfrage(c, [], 1000) };
+
+  // ---------- Belege: Google Drive ----------
+  const belegCache = new Map();
+  function blobZuBase64(blob) {
+    return new Promise((ok, nein) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = nein; r.readAsDataURL(blob); });
+  }
+  const assets = {
+    async upload(blob, o) {
+      const j = await ruf({ aktion: "beleg_speichern", name: "Beleg " + new Date().toISOString().slice(0, 19).replace("T", " ") + ".jpg", mime: (o && o.type) || blob.type || "image/jpeg", base64: await blobZuBase64(blob) });
+      belegCache.set(j.id, blob);
+      return { id: j.id, url: "", sizeBytes: blob.size, contentType: "image/jpeg" };
+    },
+  };
+  window.__belegHolen = async (id) => {
+    if (belegCache.has(id)) return belegCache.get(id);
+    const j = await ruf({ aktion: "beleg_holen", id });
+    const bytes = Uint8Array.from(atob(j.base64), (c) => c.charCodeAt(0));
+    const b = new Blob([bytes], { type: j.mime || "image/jpeg" });
+    belegCache.set(id, b);
+    return b;
+  };
+
+  // ---------- Dateien speichern: normaler Download ----------
+  const downloads = {
+    async save({ filename, data }) {
+      const blob = data instanceof Blob ? data : new Blob([data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    },
+  };
+
+  // ---------- Sprechen: Spracherkennung des Browsers (am iPhone Safari) ----------
+  function sprechen() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return null;
+    let rec = null, zustand = "idle", stopFertig = null, grund = null;
+    const teil = [], fertigT = [], zust = [];
+    const setze = (s, r) => { zustand = s; zust.forEach((h) => h(r ? { state: s, reason: r } : { state: s })); };
+    return {
+      start() {
+        return new Promise((ok, nein) => {
+          if (zustand !== "idle") { ok(); return; }
+          rec = new SR();
+          rec.lang = "de-DE"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+          let schon = "", offen = "";
+          rec.onstart = () => { setze("listening"); ok(); };
+          rec.onresult = (e) => {
+            let fest = "", vor = "";
+            for (let i = 0; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) fest += r[0].transcript; else vor += r[0].transcript; }
+            if (fest && fest !== schon) { const neu = fest.startsWith(schon) ? fest.slice(schon.length) : fest; schon = fest; fertigT.forEach((h) => h({ text: neu })); }
+            offen = vor;
+            teil.forEach((h) => h({ text: vor }));
+          };
+          rec.onerror = (e) => {
+            grund = e.error === "not-allowed" || e.error === "service-not-allowed" ? "not_granted" : (e.error === "no-speech" || e.error === "aborted") ? "stopped" : "upstream_error";
+            if (zustand === "starting") nein({ code: grund });
+          };
+          rec.onend = () => {
+            // Safari liefert manchmal nur Zwischentext und endet ohne „fertig“-Ergebnis: den nicht verlieren.
+            if (offen.trim()) { const t = offen; offen = ""; fertigT.forEach((h) => h({ text: t })); teil.forEach((h) => h({ text: "" })); }
+            const r = grund || (stopFertig ? "stopped" : "ende"); grund = null; rec = null; setze("idle", r); if (stopFertig) { const f = stopFertig; stopFertig = null; f(); } };
+          setze("starting");
+          try { rec.start(); } catch (x) { setze("idle", "upstream_error"); nein({ code: "upstream_error" }); }
+        });
+      },
+      stop() { return new Promise((ok) => { if (!rec) { ok(); return; } stopFertig = ok; setze("finishing"); try { rec.stop(); } catch { ok(); } }); },
+      active() { return zustand !== "idle"; },
+      onPartial(h) { teil.push(h); return () => {}; },
+      onFinal(h) { fertigT.push(h); return () => {}; },
+      onState(h) { zust.push(h); return () => {}; },
+    };
+  }
+
+  const faehig = { db: pinBereit.then(() => db), assets: pinBereit.then(() => assets), downloads: Promise.resolve(downloads), dictation: Promise.resolve(sprechen()) };
+  window.claude = { use: (name) => faehig[name] || Promise.resolve(null) };
+})();
+</script>
 </head>
 <body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Schichtzettel: oben sprechen, dann Termine, darunter der Taxameter des Tages und die Einträge der Reihe nach. */
+:root {
+  --bg: #f2f2ee;
+  --surface: #ffffff;
+  --sunk: #e9e8e2;
+  --ink: #15120d;
+  --muted: #625d53;
+  --line: #dcd9d0;
+  --amber: #f5b400;
+  --on-amber: #15120d;
+  --amber-text: #855e00;
+  --amber-soft: #fbedc4;
+  --meter-bg: #15120d;
+  --meter-fg: #f5b400;
+  --meter-dim: #a8955f;
+  --good: #2b7547;
+  --warn: #8f5500;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-num: "Barlow Semi Condensed", "Barlow", system-ui, -apple-system, sans-serif;
+  --r: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0e0c; --surface: #1a1815; --sunk: #23201b; --ink: #f1ece2; --muted: #a59d8e; --line: #2f2b25;
+    --amber-text: #f5c23a; --amber-soft: #3a2f12; --meter-bg: #060504; --meter-fg: #ffc21a; --meter-dim: #85744a;
+    --good: #62c48d; --warn: #e3a64e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0e0c; --surface: #1a1815; --sunk: #23201b; --ink: #f1ece2; --muted: #a59d8e; --line: #2f2b25;
+  --amber-text: #f5c23a; --amber-soft: #3a2f12; --meter-bg: #060504; --meter-fg: #ffc21a; --meter-dim: #85744a;
+  --good: #62c48d; --warn: #e3a64e; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--f-body); font-size: 17px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 96px;
+  -webkit-text-size-adjust: 100%;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+
+/* Kopf */
+.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--bg); padding-block: 12px 10px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.marke { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 19px; letter-spacing: .01em; }
+.fahne { width: 30px; height: 20px; border-radius: 4px; background: var(--amber); display: grid; place-items: center; color: var(--on-amber); font: 700 11px/1 var(--f-num); letter-spacing: .08em; }
+.tabs { display: flex; background: var(--sunk); border-radius: 999px; padding: 3px; }
+.tabs button { border: 0; background: transparent; padding: 7px 16px; border-radius: 999px; font-weight: 600; font-size: 15px; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+.hinweis { background: var(--sunk); border-radius: var(--r); padding: 12px 14px; font-size: 15px; color: var(--muted); }
+.hinweis strong { color: var(--ink); }
+.hinweis.gelb { background: var(--amber-soft); color: var(--ink); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.hinweis.gelb p { margin: 0; flex: 1 1 200px; }
+
+/* Tageskopf */
+.tagkopf { display: flex; align-items: center; gap: 8px; }
+.tagkopf h1 { flex: 1; min-width: 0; margin: 0; font-size: 22px; line-height: 1.2; text-wrap: balance; }
+.tagkopf .unter { display: block; font-size: 15px; font-weight: 500; color: var(--muted); margin-top: 2px; }
+.pfeil { width: 44px; height: 44px; flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; font-size: 20px; line-height: 1; }
+.pfeil:disabled { opacity: .35; cursor: default; }
+.pille { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: var(--sunk); color: var(--muted); vertical-align: 2px; }
+.pille.laeuft { background: var(--amber); color: var(--on-amber); }
+.pille.laeuft::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+/* Eingabe */
+.eingabe { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.eingabe label { font-weight: 600; font-size: 15px; }
+textarea#eingabe {
+  width: 100%; min-height: 110px; resize: vertical; border: 2px solid var(--line); border-radius: 12px;
+  background: var(--bg); padding: 12px; font-size: 19px; line-height: 1.4;
+}
+textarea#eingabe:focus { border-color: var(--amber); outline: none; }
+textarea#eingabe::placeholder { color: var(--muted); opacity: .85; }
+.vorlaeufig { min-height: 1.2em; font-size: 15px; color: var(--muted); font-style: italic; }
+.vorlaeufig:empty { display: none; }
+.knoepfe { display: flex; gap: 10px; }
+.knopf { min-height: 52px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); padding: 0 18px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.knopf.haupt { flex: 1; background: var(--amber); color: var(--on-amber); border-color: transparent; font-size: 18px; }
+.knopf:disabled { opacity: .55; cursor: default; }
+.knopf.mic { flex: 1; font-size: 18px; }
+.knopf.mic[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.knopf svg { width: 22px; height: 22px; flex: none; }
+.knopf.beleg { flex: none; font-size: 17px; }
+.pille-mic {
+  width: 100%; min-height: 64px; border: 0; border-radius: 999px;
+  background: var(--meter-bg); color: var(--meter-fg);
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  font-size: 20px; font-weight: 700; letter-spacing: .01em;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.pille-mic svg { width: 28px; height: 28px; }
+label.pille-mic { cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.mic-hinweis small { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; }
+.zustand { margin: 0; text-align: center; font-size: 12px; color: var(--muted); letter-spacing: .02em; }
+.pille-mic[aria-pressed="true"] { background: var(--amber); color: var(--on-amber); }
+.pille-mic[aria-pressed="true"]::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+@media (prefers-reduced-motion: no-preference) { .pille-mic[aria-pressed="true"]::before { animation: puls 1s ease-in-out infinite; } }
+@keyframes puls { 50% { opacity: .25; } }
+.mic-hinweis { margin: 0; background: var(--amber-soft); border-radius: 10px; padding: 10px 12px; font-size: 15px; }
+.beleg-datei { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.beleg-bild { display: block; max-width: 100%; max-height: 240px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); cursor: zoom-in; }
+.beleg-bild.gross { max-height: none; cursor: zoom-out; }
+.beleg-info { font-size: 13px; color: var(--muted); margin: 0; }
+.schritte { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--muted); }
+.schritte li { display: flex; align-items: center; gap: 6px; }
+.schritte b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--sunk); color: var(--ink); font: 700 12px/1 var(--f-num); }
+.beispiele { font-size: 14px; color: var(--muted); }
+.beispiele summary { cursor: pointer; font-weight: 600; color: var(--amber-text); }
+.beispiele ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+
+.quittung { border-radius: 14px; background: var(--amber-soft); padding: 12px 14px; display: flex; gap: 12px; align-items: center; }
+.quittung p { margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.quittung p small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; }
+.quittung button { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 12px; font-weight: 600; flex: none; }
+
+/* Termine */
+.termine { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.termine > li + li { border-top: 1px solid var(--line); }
+.termin { width: 100%; border: 0; background: none; text-align: left; display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; padding: 12px 14px; align-items: start; }
+.termin .wann { font-family: var(--f-num); font-variant-numeric: tabular-nums; font-weight: 600; line-height: 1.2; }
+.termin .wann small { display: block; font-family: var(--f-body); font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.termin .titel { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.termin .info { display: block; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.termin.bald { background: var(--amber-soft); }
+.termin.bald .wann small { color: var(--amber-text); }
+.status { font-size: 12px; font-weight: 600; letter-spacing: .03em; }
+.status.ok { color: var(--good); }
+.status.warte { color: var(--muted); }
+.status.fehler { color: var(--warn); }
+
+/* Taxameter */
+.meter { background: var(--meter-bg); color: var(--meter-fg); border-radius: 18px; padding: 16px; display: grid; gap: 14px; border: 1px solid var(--line); }
+.meter .gross { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.meter .klein { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 10px; border-top: 1px solid rgba(245,180,0,.22); padding-top: 12px; }
+.wert { min-width: 0; }
+.wert b { display: block; font-family: var(--f-num); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 26px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wert span { display: block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--meter-dim); margin-top: 4px; }
+.meter .klein b { font-size: 19px; }
+.meter .leer b { color: var(--meter-dim); }
+@media (max-width: 430px) {
+  .meter .gross { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wert b { font-size: 28px; }
+}
+
+/* Einträge */
+.abschnitt { display: flex; flex-direction: column; gap: 10px; }
+.abschnitt h2 { margin: 0; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.liste { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.liste > li + li { border-top: 1px solid var(--line); }
+.zeile { width: 100%; border: 0; background: none; text-align: left; display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 13px 14px; }
+.zeile .uhr { font-family: var(--f-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--muted); }
+.zeile .was { min-width: 0; }
+.zeile .titel { font-weight: 600; overflow-wrap: anywhere; }
+.zeile .info { display: block; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.zeile .betrag { font-family: var(--f-num); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; white-space: nowrap; }
+.zeile .betrag.minus { color: var(--warn); }
+.zeile.rand .titel { color: var(--amber-text); }
+.zeile.vorfall { box-shadow: inset 4px 0 0 var(--warn); }
+.marker { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; margin-right: 6px; vertical-align: 2px; }
+.leerstand { padding: 18px 16px; color: var(--muted); font-size: 15px; }
+.leerstand p { margin: 0 0 8px; }
+.leerstand q { color: var(--ink); font-style: italic; }
+
+.bearbeiten { padding: 4px 14px 16px; display: grid; gap: 10px; background: var(--sunk); }
+.felder { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.feld { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.feld.breit { grid-column: 1 / -1; }
+.feld span { font-size: 13px; color: var(--muted); font-weight: 600; }
+.feld input, .feld select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 8px 10px; font-size: 17px; }
+.bearbeiten .knoepfe .knopf { flex: 1; min-height: 46px; }
+.knopf.weg { color: var(--warn); }
+.knopf.weg.sicher { background: var(--warn); color: var(--surface); border-color: transparent; }
+.gesagt { font-size: 13px; color: var(--muted); font-style: italic; margin: 0; }
+
+/* Auswertung */
+.auswertung { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; display: grid; gap: 10px; }
+.auswertung h2 { margin: 0; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.auswertung .text { white-space: pre-wrap; font-size: 16px; }
+.auswertung .text:empty { display: none; }
+.auswertung .stand { font-size: 13px; color: var(--muted); }
+.auswertung .stand:empty { display: none; }
+.reihe { display: flex; gap: 10px; flex-wrap: wrap; }
+.reihe .knopf { flex: 1 1 180px; }
+
+/* Monat */
+.tabelle-huelle { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { padding: 10px 10px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-size: 12px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+tbody tr { border-top: 1px solid var(--line); }
+tbody tr:first-child { border-top: 0; }
+tbody tr[data-tag] { cursor: pointer; }
+tfoot td { border-top: 2px solid var(--ink); font-weight: 700; }
+td.num, th.num { font-family: var(--f-num); }
+td.text { white-space: normal; text-align: left; min-width: 180px; }
+
+/* Meldung */
+.toast {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+}
+.toast div { pointer-events: auto; max-width: 640px; margin: 0 auto; background: var(--ink); color: var(--bg); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.25); font-size: 15px; }
+.toast p { margin: 0; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: no-preference) { .toast div, .quittung { animation: hoch .18s ease-out; } }
+@keyframes hoch { from { transform: translateY(6px); opacity: .6; } to { transform: none; opacity: 1; } }
+</style>
+
 <div class="wrap">
-  <div class="kopf">
+  <header class="bar">
     <div class="marke"><span class="fahne" aria-hidden="true">TAXI</span>Tagebuch</div>
-    <a class="ansehen" id="ansehen" href="#">Tagebuch ansehen</a>
-  </div>
+    <nav class="tabs" role="tablist" aria-label="Ansicht">
+      <button id="tab-heute" role="tab" aria-selected="true">Tag</button>
+      <button id="tab-monat" role="tab" aria-selected="false">Monat</button>
+    </nav>
+  </header>
 
-  <div class="mitte">
-    <button id="knopf" type="button" aria-label="Sprechen">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-    </button>
-    <div class="zustand" id="zustand" aria-live="polite">Sprechen</div>
-    <div class="text" id="text"></div>
-    <div class="reihe" id="auswahl" hidden>
-      <button type="button" class="knopf2" id="nochmal">Nochmal</button>
-      <button type="button" class="knopf2 haupt" id="jetzt">Eintragen</button>
-    </div>
-    <div class="hinweis" id="hinweis" hidden></div>
-    <div class="ersatz" id="ersatz" hidden>
-      <textarea id="eingabe" enterkeyhint="send" placeholder="Hier tippen, dann das Mikrofon auf der Tastatur"></textarea>
-      <button type="button" class="knopf2 haupt" id="senden">Eintragen</button>
-    </div>
-  </div>
+  <div id="meldung-db" class="hinweis" hidden></div>
 
-  <div class="fuss">Probe: Knopf tippen, einen Satz sagen, kurz still sein. Erscheint der Satz hier, funktioniert das Mikrofon.</div>
+  <!-- TAG -->
+  <section id="ansicht-heute" class="wrap">
+    <div id="erinnerung" class="hinweis gelb" hidden></div>
+    <div id="abschluss-hinweis" class="hinweis gelb" hidden><p id="abschluss-text"></p><button type="button" class="knopf" id="abschluss-knopf">Zum Monat</button></div>
+
+    <div class="tagkopf">
+      <button class="pfeil" id="tag-zurueck" aria-label="Voriger Tag">‹</button>
+      <h1><span id="tag-titel">Heute</span> <span id="tag-pille" class="pille">nicht begonnen</span><span class="unter" id="tag-unter"></span></h1>
+      <button class="pfeil" id="tag-vor" aria-label="Nächster Tag">›</button>
+    </div>
+
+    <form class="eingabe" id="eingabe-form" autocomplete="off">
+      <label for="eingabe">Was war? Einfach sagen.</label>
+      <label for="eingabe" class="pille-mic" id="mic" role="button" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        <span id="mic-text">Sprechen</span>
+      </label>
+      <p class="mic-hinweis" id="mic-hinweis" hidden>Jetzt auf der Tastatur das <b>Mikrofon</b> antippen (ganz unten rechts, unter den Tasten), sprechen, dann „Senden“.<br><small>Kein Mikrofon zu sehen? Am iPhone unter Einstellungen → Allgemein → Tastatur die „Diktierfunktion“ einschalten.</small></p>
+      <textarea id="eingabe" enterkeyhint="send" placeholder="z. B. Fahrt vom Bahnhof Gmunden zum Flughafen Linz, 62 km, 98 Euro mit Karte"></textarea>
+      <div class="vorlaeufig" id="vorlaeufig" aria-live="polite"></div>
+      <div class="knoepfe">
+        <button type="button" class="knopf beleg" id="beleg-knopf" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h3.5l1.8-2.5h7.4L17.5 8H21v11H3z"/><circle cx="12" cy="13.2" r="3.6"/></svg>
+          <span>Beleg</span>
+        </button>
+        <button type="submit" class="knopf haupt" id="eintragen">Eintragen</button>
+      </div>
+      <input type="file" accept="image/*" id="beleg-datei" class="beleg-datei" tabindex="-1" aria-hidden="true">
+      <ol class="schritte" id="schritte">
+        <li><b>1</b>„Sprechen“ antippen</li>
+        <li><b>2</b>Mikrofon der Tastatur</li>
+        <li><b>3</b>reden, dann „Senden“</li>
+      </ol>
+      <details class="beispiele">
+        <summary>Was ich verstehe</summary>
+        <ul>
+          <li>„Tagesbeginn, km-Stand 84.250“</li>
+          <li>„Vom Bahnhof nach Altmünster, 9 Kilometer, 18 Euro bar, 2 Euro Trinkgeld“</li>
+          <li>„Getankt, 48 Liter, 79 Euro, km-Stand 84.400“</li>
+          <li>„Service beim Mercedes, 380 Euro, Überweisung“ · „Handyhalterung gekauft, 24 Euro“</li>
+          <li>Knopf „Beleg“: Tankbeleg oder Rechnung fotografieren, Betrag, Liter und Datum werden ausgelesen</li>
+          <li>„Vorkommnis: Fahrgast hat Schirm liegen gelassen“</li>
+          <li>„Termin morgen 5 Uhr Flughafen Salzburg abholen, Erinnerung am Vorabend und eine Stunde vorher“</li>
+          <li>„Die letzte Fahrt war 22 Euro“ · „Letzten Eintrag löschen“ · „Termin morgen auf 6 Uhr verschieben“</li>
+          <li>„Gestern noch eine Fahrt ins Spital Vöcklabruck, 45 Euro auf Rechnung“</li>
+          <li>„Pause 30 Minuten“ · „Tagesende, km-Stand 84.512“</li>
+        </ul>
+      </details>
+    </form>
+
+    <div class="quittung" id="quittung" hidden><p id="quittung-text"></p><button type="button" id="quittung-rueck">Rückgängig</button></div>
+
+    <div class="abschnitt" id="termine-abschnitt" hidden>
+      <h2>Termine</h2>
+      <ul class="termine" id="termine"></ul>
+    </div>
+
+    <div class="meter" aria-label="Tageszahlen">
+      <div class="gross">
+        <div class="wert"><b id="m-umsatz">–</b><span>Umsatz</span></div>
+        <div class="wert"><b id="m-fahrten">–</b><span>Fahrten</span></div>
+        <div class="wert"><b id="m-km">–</b><span>Tages-km</span></div>
+        <div class="wert"><b id="m-zeit">–</b><span>Arbeitszeit</span></div>
+      </div>
+      <div class="klein">
+        <div class="wert"><b id="m-bar">–</b><span>bar</span></div>
+        <div class="wert"><b id="m-karte">–</b><span>Karte / Rechn.</span></div>
+        <div class="wert"><b id="m-trinkgeld">–</b><span>Trinkgeld</span></div>
+        <div class="wert"><b id="m-ausgaben">–</b><span>Ausgaben</span></div>
+        <div class="wert"><b id="m-besetzt">–</b><span>Besetzt-km</span></div>
+        <div class="wert"><b id="m-leer">–</b><span>Leer-km</span></div>
+        <div class="wert"><b id="m-eurkm">–</b><span>€ je km</span></div>
+        <div class="wert"><b id="m-eurstd">–</b><span>€ je Stunde</span></div>
+        <div class="wert"><b id="m-pausen">–</b><span>Pausen</span></div>
+      </div>
+    </div>
+
+    <div class="abschnitt">
+      <h2>Einträge</h2>
+      <ul class="liste" id="liste"></ul>
+    </div>
+
+    <div class="auswertung" id="tag-auswertung">
+      <div class="knoepfe"><button type="button" class="knopf" id="tag-auswerten" style="flex:1">Tag auswerten lassen</button></div>
+      <div class="text" id="tag-auswertung-text"></div>
+      <div class="stand" id="tag-auswertung-stand"></div>
+    </div>
+    <p class="zustand" id="zustand"></p>
+  </section>
+
+  <!-- MONAT -->
+  <section id="ansicht-monat" class="wrap" hidden>
+    <div class="tagkopf">
+      <button class="pfeil" id="monat-zurueck" aria-label="Voriger Monat">‹</button>
+      <h1><span id="monat-titel">Monat</span><span class="unter" id="monat-unter"></span></h1>
+      <button class="pfeil" id="monat-vor" aria-label="Nächster Monat">›</button>
+    </div>
+
+    <div class="auswertung">
+      <h2>Monatsabschluss</h2>
+      <div class="reihe">
+        <button type="button" class="knopf" id="monat-auswerten">Zusammenfassung schreiben lassen</button>
+        <button type="button" class="knopf haupt" id="excel">Excel-Datei speichern</button>
+        <button type="button" class="knopf" id="belege-zip" hidden>Belege als ZIP</button>
+      </div>
+      <div class="text" id="monat-auswertung-text"></div>
+      <div class="stand" id="monat-auswertung-stand"></div>
+    </div>
+
+    <div class="meter" aria-label="Monatszahlen">
+      <div class="gross">
+        <div class="wert"><b id="mm-umsatz">–</b><span>Umsatz</span></div>
+        <div class="wert"><b id="mm-tage">–</b><span>Arbeitstage</span></div>
+        <div class="wert"><b id="mm-km">–</b><span>Kilometer</span></div>
+        <div class="wert"><b id="mm-zeit">–</b><span>Stunden</span></div>
+      </div>
+      <div class="klein">
+        <div class="wert"><b id="mm-fahrten">–</b><span>Fahrten</span></div>
+        <div class="wert"><b id="mm-trinkgeld">–</b><span>Trinkgeld</span></div>
+        <div class="wert"><b id="mm-ausgaben">–</b><span>Ausgaben</span></div>
+        <div class="wert"><b id="mm-ergebnis">–</b><span>Einnahmen − Ausg.</span></div>
+        <div class="wert"><b id="mm-leer">–</b><span>Leer-km</span></div>
+        <div class="wert"><b id="mm-verbrauch">–</b><span>l / 100 km</span></div>
+        <div class="wert"><b id="mm-eurkm">–</b><span>€ je km</span></div>
+        <div class="wert"><b id="mm-eurstd">–</b><span>€ je Stunde</span></div>
+        <div class="wert"><b id="mm-vorfaelle">–</b><span>Vorkommnisse</span></div>
+      </div>
+    </div>
+
+    <div class="abschnitt">
+      <h2>Tage</h2>
+      <div class="tabelle-huelle">
+        <table>
+          <thead><tr><th>Tag</th><th class="num">Std.</th><th class="num">km</th><th class="num">Fahrten</th><th class="num">Umsatz</th><th class="num">€/km</th></tr></thead>
+          <tbody id="monat-tabelle"></tbody>
+          <tfoot id="monat-summe"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="abschnitt" id="ausgaben-abschnitt" hidden>
+      <h2>Ausgaben nach Art</h2>
+      <div class="tabelle-huelle">
+        <table><thead><tr><th>Art</th><th class="num">Anzahl</th><th class="num">Betrag</th></tr></thead><tbody id="ausgaben-tabelle"></tbody></table>
+      </div>
+    </div>
+
+    <div class="abschnitt" id="vorfaelle-abschnitt" hidden>
+      <h2>Besondere Vorkommnisse</h2>
+      <div class="tabelle-huelle">
+        <table><thead><tr><th>Tag</th><th>Art</th><th>Was</th></tr></thead><tbody id="vorfaelle-tabelle"></tbody></table>
+      </div>
+    </div>
+  </section>
 </div>
+
+<div class="toast" id="toast" hidden><div><p id="toast-text"></p></div></div>
 
 <script>
 (() => {
   "use strict";
-  const TAGEBUCH = "https://claude.ai/artifact/5Nwys2KUbVcisHQttM87nU";
   const $ = (s) => document.querySelector(s);
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let erkenner = null, text = "", laeuft = false, uhr = null;
+  const S = {
+    db: null, sample: null, dict: null, dl: null, assets: null, bilder: false,
+    heute: isoDatum(new Date()),
+    offen: new Map(),
+    tagId: null, folgen: true, tag: null, tagGeladen: false,
+    monat: null, monatTage: [], monatGeladen: false, monatAuswertung: null,
+    termine: [], offenAuf: null, loeschSicher: false,
+    subOffen: null, subTag: null, subMonat: null, subMonatAusw: null, subTermine: null,
+    beschaeftigt: false, rueck: null,
+  };
+  const TYPEN = ["beginn", "ende", "fahrt", "ausgabe", "pause", "kmstand", "vorkommnis", "notiz", "termin"];
+  const KAT_AUSGABE = ["Tanken", "Service/Werkstatt", "Reifen", "Pflege/Waschen", "Zubehör", "Parken", "Maut/Vignette", "Versicherung", "Telefon", "Büro", "Sonstiges"];
+  const KAT_VORFALL = ["Unfall/Schaden", "Polizei/Kontrolle", "Fahrgast", "Fundsache", "Panne", "Beschwerde", "Sonstiges"];
+  const ARTEN_FAHRT = ["Flughafen", "Krankenfahrt", "Botenfahrt", "Stadtfahrt", "Überland", "Ausflug"];
+  const ZAHLARTEN = ["bar", "karte", "rechnung", "überweisung"];
+  const ZAHLART_NAME = { bar: "bar", karte: "Karte", rechnung: "Rechnung", "überweisung": "Überweisung" };
 
-  $("#ansehen").href = TAGEBUCH;
-
-  // Gleiche Kodierung wie die Seite erwartet: Base64 der UTF-8-Bytes, „+“→„-a“, „/“→„-b“, ohne „=“.
-  function kodieren(t) {
-    const bytes = new TextEncoder().encode(t);
-    let bin = "";
-    for (const b of bytes) bin += String.fromCharCode(b);
-    return btoa(bin).replace(/\+/g, "-a").replace(/\//g, "-b").replace(/=+$/, "");
+  /* ---------- Ablaufprotokoll (nur Abläufe, keine gesprochenen Inhalte) ---------- */
+  const FASSUNG = "App 1";
+  const D = {
+    id: "d-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), fassung: FASSUNG, start: new Date().toISOString(),
+    ua: navigator.userAgent, vollbild: !!navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches),
+    breite: innerWidth, hoehe: innerHeight, faehig: {}, ereignisse: [],
+  };
+  let diagTimer = null, diagLaeuft = false;
+  function diagSchreiben() {
+    if (!S.db) return;
+    clearTimeout(diagTimer);
+    diagTimer = setTimeout(async () => {
+      if (diagLaeuft) { diagSchreiben(); return; }
+      diagLaeuft = true;
+      try { await S.db.doc("diagnose/" + D.id).set(JSON.parse(JSON.stringify(D))); } catch {} finally { diagLaeuft = false; }
+    }, 700);
   }
-  function weiter(t) {
-    t = (t || "").trim();
-    if (!t) return;
-    $("#zustand").textContent = "Wird eingetragen …";
-    location.href = TAGEBUCH + "#s-" + kodieren(t);
+  function protokoll(was, extra) {
+    D.ereignisse.push({ t: new Date().toTimeString().slice(0, 8), was, ...(extra || {}) });
+    if (D.ereignisse.length > 80) D.ereignisse.splice(0, D.ereignisse.length - 80);
+    diagSchreiben();
+  }
+  window.addEventListener("error", (e) => protokoll("fehler", { text: String(e.message || "").slice(0, 200), zeile: e.lineno }));
+  window.addEventListener("unhandledrejection", (e) => protokoll("fehler-promise", { text: String(e.reason?.code || e.reason?.message || e.reason || "").slice(0, 200) }));
+
+  /* ---------- Hilfen ---------- */
+  function isoDatum(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function ausIso(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
+  function plusTage(s, n) { const d = ausIso(s); d.setDate(d.getDate() + n); return isoDatum(d); }
+  function plusMonate(m, n) { const [y, mo] = m.split("-").map(Number); const d = new Date(y, mo - 1 + n, 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
+  function jetztHM() { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+  function minuten(hm) { if (!hm || !/^\d{1,2}:\d{2}$/.test(hm)) return null; const [h, m] = hm.split(":").map(Number); return h * 60 + m; }
+  function dauer(von, bis) { const a = minuten(von), b = minuten(bis); if (a == null || b == null) return null; let d = b - a; if (d < 0) d += 1440; return d; }
+  function hm(min) { if (min == null || !isFinite(min)) return "–"; const h = Math.floor(min / 60), m = Math.round(min % 60); return h + ":" + String(m).padStart(2, "0"); }
+  const euroF = new Intl.NumberFormat("de-AT", { style: "currency", currency: "EUR" });
+  const euroK = new Intl.NumberFormat("de-AT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  const zahlF = new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 });
+  const zahl2 = new Intl.NumberFormat("de-AT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function euro(x, rund) { return x == null || !isFinite(x) ? "–" : (rund ? euroK : euroF).format(x); }
+  function km(x) { return x == null || !isFinite(x) ? "–" : zahlF.format(x); }
+  function n(x) { if (x == null || x === "") return null; const v = typeof x === "number" ? x : zahlAus(String(x)); return isFinite(v) ? v : null; }
+  function zahlAus(s) {
+    s = s.trim().replace(/\s/g, "").replace(/€|eur(o)?/i, "");
+    if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) return Number(s.replace(/\./g, "").replace(",", "."));
+    return Number(s.replace(",", "."));
+  }
+  function summe(liste, feld) { return liste.reduce((a, e) => a + (n(e[feld]) || 0), 0); }
+  function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+  function neueId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function datumLang(s) { return ausIso(s).toLocaleDateString("de-AT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }); }
+  function datumKurz(s) { return ausIso(s).toLocaleDateString("de-AT", { weekday: "short", day: "numeric", month: "numeric" }); }
+  function monatName(m) { const [y, mo] = m.split("-").map(Number); return new Date(y, mo - 1, 1).toLocaleDateString("de-AT", { month: "long", year: "numeric" }); }
+  function leererTag(id) { return { datum: id, monat: id.slice(0, 7), beginn: null, ende: null, eintraege: [], auswertung: null }; }
+  function sortSchluessel(zeit, beginnZeit) { let m = minuten(zeit) ?? 0; const b = minuten(beginnZeit); if (b != null && m < b - 60) m += 1440; return m; }
+  function sortiere(t) { t.eintraege.sort((a, b) => sortSchluessel(a.zeit, t.beginn?.zeit) - sortSchluessel(b.zeit, t.beginn?.zeit)); }
+  function erinnerText(min) {
+    if (min == null) return "";
+    if (min === 0) return "zur Startzeit";
+    if (min % 1440 === 0) return min === 1440 ? "1 Tag vorher" : min / 1440 + " Tage vorher";
+    if (min % 60 === 0) return min === 60 ? "1 Std. vorher" : min / 60 + " Std. vorher";
+    return min + " min vorher";
   }
 
-  function zeige(zustand, satz, vorlaeufig) {
-    $("#zustand").textContent = zustand;
-    const el = $("#text");
-    el.textContent = satz || "";
-    el.classList.toggle("vorlaeufig", !!vorlaeufig);
+  /* ---------- Meldungen ---------- */
+  let toastTimer = null;
+  function melde(text) {
+    $("#toast-text").textContent = text;
+    $("#toast").hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { $("#toast").hidden = true; }, 5000);
+  }
+  function quittiere(texte, quelle, rueck) {
+    const q = $("#quittung");
+    $("#quittung-text").innerHTML = esc(texte.join(" · ")) + "";
+    S.rueck = rueck;
+    $("#quittung-rueck").hidden = !rueck;
+    q.hidden = false;
   }
 
-  function ersatzZeigen(grund) {
-    $("#hinweis").innerHTML = grund;
-    $("#hinweis").hidden = false;
-    $("#ersatz").hidden = false;
+  /* ---------- Kennzahlen ---------- */
+  function kennzahlen(t, live) {
+    const e = t?.eintraege || [];
+    const f = e.filter((x) => x.typ === "fahrt");
+    const umsatz = summe(f, "preis");
+    const bar = summe(f.filter((x) => x.zahlart === "bar"), "preis");
+    const unbar = summe(f.filter((x) => x.zahlart && x.zahlart !== "bar"), "preis");
+    const trinkgeld = summe(f, "trinkgeld");
+    const besetzt = summe(f, "km");
+    const ausgaben = summe(e.filter((x) => x.typ === "ausgabe"), "betrag");
+    const pausen = summe(e.filter((x) => x.typ === "pause"), "dauer_min");
+    const bKm = n(t?.beginn?.km), eKm = n(t?.ende?.km);
+    let tageskm = bKm != null && eKm != null && eKm >= bKm ? eKm - bKm : null;
+    let tageskmBisher = false;
+    if (tageskm == null && bKm != null) {
+      const staende = e.map((x) => n(x.km_stand)).filter((v) => v != null && v >= bKm);
+      if (staende.length) { tageskm = Math.max(...staende) - bKm; tageskmBisher = true; }
+    }
+    let arbeit = null;
+    if (t?.beginn?.zeit) {
+      if (t.ende?.zeit) arbeit = dauer(t.beginn.zeit, t.ende.zeit);
+      else if (live) arbeit = dauer(t.beginn.zeit, jetztHM());
+      if (arbeit != null) arbeit = Math.max(0, arbeit - pausen);
+    }
+    const leer = tageskm != null ? Math.max(0, tageskm - besetzt) : null;
+    return {
+      fahrten: f.length, umsatz, bar, unbar, trinkgeld, besetzt, ausgaben, pausen, tageskm, tageskmBisher, arbeit, leer,
+      vorfaelle: e.filter((x) => x.typ === "vorkommnis").length,
+      eurKm: tageskm > 0 ? umsatz / tageskm : null,
+      eurStd: arbeit > 0 ? umsatz / (arbeit / 60) : null,
+    };
+  }
+  function tankbuch(tage, vorher) {
+    const stopps = [];
+    for (const t of [...(vorher || []), ...tage]) for (const e of t.eintraege || [])
+      if (e.typ === "ausgabe" && e.kategorie === "Tanken") stopps.push({ datum: t.datum, monat: t.monat, zeit: e.zeit, km_stand: n(e.km_stand), liter: n(e.liter), betrag: n(e.betrag), zahlart: e.zahlart });
+    stopps.sort((a, b) => (a.datum + a.zeit).localeCompare(b.datum + b.zeit));
+    let letzter = null;
+    for (const s of stopps) {
+      s.seit = s.km_stand != null && letzter != null && s.km_stand > letzter ? s.km_stand - letzter : null;
+      s.verbrauch = s.seit && s.liter ? (s.liter / s.seit) * 100 : null;
+      s.literpreis = s.liter && s.betrag ? s.betrag / s.liter : null;
+      if (s.km_stand != null) letzter = s.km_stand;
+    }
+    return stopps;
   }
 
-  function fertig() {
-    laeuft = false;
-    $("#knopf").classList.remove("hoert");
-    const t = text.trim();
-    if (!t) { zeige("Nichts verstanden – nochmal tippen", ""); return; }
-    // Probe-Modus: nur zeigen, was verstanden wurde, nichts weiterschicken.
-    zeige("Verstanden – das Mikrofon funktioniert", "„" + t + "“");
-    $("#auswahl").hidden = false;
-    $("#jetzt").hidden = true;
+  /* ---------- Welcher Tag ist dran ---------- */
+  function aktiverTag() {
+    const heute = S.heute, gestern = plusTage(heute, -1);
+    const h = S.offen.get(heute), g = S.offen.get(gestern);
+    if (h?.beginn) return heute;
+    if (g?.beginn && !g?.ende) return gestern;
+    return heute;
+  }
+  function istAktiv(id) { return id === aktiverTag(); }
+
+  /* ---------- Verstehen ---------- */
+  function wochenTabelle() {
+    const z = [];
+    for (let i = -7; i <= 14; i++) { const d = plusTage(S.heute, i); z.push(ausIso(d).toLocaleDateString("de-AT", { weekday: "short", day: "numeric", month: "numeric" }) + " = " + d + (i === 0 ? " (heute)" : i === 1 ? " (morgen)" : i === -1 ? " (gestern)" : "")); }
+    return z.join("; ");
+  }
+  function kurzText(e) {
+    if (e.typ === "fahrt") return "Fahrt " + [e.von, e.nach].filter(Boolean).join(" → ") + (e.km != null ? ", " + km(e.km) + " km" : "") + (e.preis != null ? ", " + euro(e.preis) : "") + (e.zahlart ? " " + (ZAHLART_NAME[e.zahlart] || e.zahlart) : "") + (e.trinkgeld ? ", +" + euro(e.trinkgeld) + " Trinkgeld" : "");
+    if (e.typ === "ausgabe") return (e.kategorie || "Ausgabe") + (e.was ? " (" + e.was + ")" : "") + (e.betrag != null ? " " + euro(e.betrag) : "") + (e.liter != null ? ", " + zahlF.format(e.liter) + " l" : "") + (e.km_stand != null ? ", km-Stand " + km(e.km_stand) : "") + (e.beleg ? ", mit Beleg" : "");
+    if (e.typ === "pause") return "Pause" + (e.dauer_min != null ? " " + e.dauer_min + " min" : "");
+    if (e.typ === "kmstand") return "km-Stand " + km(e.km_stand);
+    if (e.typ === "vorkommnis") return "Vorkommnis" + (e.kategorie ? " (" + e.kategorie + ")" : "") + ": " + (e.text || "");
+    if (e.typ === "termin") return "Termin " + datumKurz(e.datum) + (e.zeit ? " " + e.zeit : "") + " " + (e.titel || "");
+    if (e.typ === "beginn") return "Tagesbeginn " + e.zeit + (e.km_stand != null ? ", km-Stand " + km(e.km_stand) : "");
+    if (e.typ === "ende") return "Tagesende " + e.zeit + (e.km_stand != null ? ", km-Stand " + km(e.km_stand) : "");
+    return "Notiz: " + (e.text || "");
   }
 
-  function starten() {
-    clearInterval(uhr);
-    $("#auswahl").hidden = true;
-    if (!SR) {
-      ersatzZeigen("Dieses Gerät erkennt hier keine Sprache. Tipp ins Feld und nimm das <b>Mikrofon der Tastatur</b>.");
-      $("#eingabe").focus();
+  function lokalVerstehen(text) {
+    const t = text.toLowerCase();
+    const letzter = (S.tag?.eintraege || []).at(-1);
+    if (/(letzt\w*|vorig\w*).{0,20}(lösch|streich|weg)|(lösch|streich)\w*.{0,20}(letzt|vorig)/.test(t)) {
+      const id = letzter?.id || (S.tag?.ende ? "ende" : S.tag?.beginn ? "beginn" : null);
+      return id ? [{ aktion: "loeschen", id }] : [];
+    }
+    let zeit = null;
+    let m = t.match(/\b(\d{1,2}):(\d{2})\b/) || t.match(/\b(\d{1,2})(?:[.](\d{2}))?\s*uhr\b/);
+    if (m) { const h = +m[1], mi = +(m[2] || 0); if (h < 24 && mi < 60) zeit = String(h).padStart(2, "0") + ":" + String(mi).padStart(2, "0"); }
+    const standM = t.match(/(?:km[-\s]?stand|kilometerstand|tachostand|tacho|stand)\D{0,8}(\d{1,3}(?:[.\s]\d{3})+|\d{3,7})/);
+    const kmM = t.match(/(\d+(?:[.,]\d+)?)\s*(?:km|kilometer)\b/);
+    const preisM = t.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)\b/);
+    const tgM = t.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:€|euro)?\s*trinkgeld|trinkgeld\D{0,6}(\d+(?:[.,]\d{1,2})?)/);
+    const literM = t.match(/(\d+(?:[.,]\d+)?)\s*(?:l|liter)\b/);
+    const zahlart = /\bbar\b|cash|bargeld/.test(t) ? "bar" : /karte|bankomat|kontaktlos|apple ?pay|google ?pay|kredit/.test(t) ? "karte" : /überweis/.test(t) ? "überweisung" : /rechnung/.test(t) ? "rechnung" : null;
+    const ENDE = "(?=\\s*[,;]|\\s+(?:für|um|mit|bar|karte|\\d)|\\.\\s|\\.$|$)";
+    const vn = text.match(new RegExp("\\b(?:von|vom|ab)\\s+(?:der\\s+|dem\\s+)?(.+?)\\s+(?:nach|zum|zur|in die|ins|bis)\\s+(.+?)" + ENDE, "i"))
+      || (() => { const x = text.match(new RegExp("\\b(?:nach|zum|zur|ins)\\s+(.+?)" + ENDE, "i")); return x ? [x[0], "", x[1]] : null; })();
+    const gross = (text.match(/\d{1,3}(?:[.\s]\d{3})+|\d{4,7}/g) || []).map(zahlAus).filter((v) => v >= 1000);
+    const stand = standM ? zahlAus(standM[1]) : (gross.length ? Math.max(...gross) : null);
+    const z = zeit || jetztHM();
+    let e;
+    if (/termin|erinner|vormerken|nicht vergessen/.test(t)) {
+      let datum = S.heute;
+      if (/übermorgen/.test(t)) datum = plusTage(S.heute, 2);
+      else if (/morgen/.test(t)) datum = plusTage(S.heute, 1);
+      const tage = ["sonntag", "montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag"];
+      tage.forEach((w, i) => { if (t.includes(w)) { let d = S.heute; for (let k = 1; k <= 7; k++) { d = plusTage(S.heute, k); if (ausIso(d).getDay() === i) break; } datum = d; } });
+      // Titel ohne Datum- und Zeitwörter: „Termin morgen um 5:00 Flughafen abholen“ → „Flughafen abholen“
+      const titel = text
+        .replace(/^(termin|erinnerung|erinnere mich)[:,\s]*/i, "")
+        .replace(/(^|[\s,])(heute|übermorgen|morgen|am|um|ab|gegen)(?=[\s,.]|$)/gi, "$1 ")
+        .replace(/\b(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b/gi, " ")
+        .replace(/\b\d{1,2}([:.]\d{2})?\s*(uhr)?\b/gi, " ")
+        .replace(/,?\s*erinnerung.*$/i, "")
+        .replace(/\s{2,}/g, " ").replace(/^[\s,.-]+|[\s,.-]+$/g, "").trim();
+      e = { typ: "termin", datum, zeit, titel: (titel || text).slice(0, 120) };
+    }
+    else if (/tagesende|feierabend|schichtende|dienstende|schluss|tag beenden|\bende\b/.test(t)) e = { typ: "ende", zeit: z, km_stand: stand };
+    else if (/tagesbeginn|schichtbeginn|dienstbeginn|tag beginnen|anfang|losgefahren|\bstart|beginn/.test(t)) e = { typ: "beginn", zeit: z, km_stand: stand };
+    else if (/unfall|schaden|polizei|kontrolle|vorfall|vorkommnis|beschwerde|fundsache|liegen ?gelassen|vergessen|panne|kratzer|delle/.test(t)) {
+      const kat = /unfall|schaden|kratzer|delle/.test(t) ? "Unfall/Schaden" : /polizei|kontrolle/.test(t) ? "Polizei/Kontrolle" : /fundsache|liegen ?gelassen|vergessen/.test(t) ? "Fundsache" : /panne/.test(t) ? "Panne" : /beschwerde/.test(t) ? "Beschwerde" : "Sonstiges";
+      e = { typ: "vorkommnis", zeit: z, kategorie: kat, text: text.replace(/^vorkommnis[:,\s]*/i, "").trim(), km_stand: standM ? zahlAus(standM[1]) : null };
+    }
+    else if (/tank|diesel|benzin|service|werkstatt|ölwechsel|pickerl|inspektion|reparatur|reifen|wasch|staubsaug|zubehör|gekauft|einkauf|park|maut|vignette|versicherung|telefon|handyrechnung|büro|ausgabe|kosten/.test(t)) {
+      const kat = /tank|diesel|benzin/.test(t) ? "Tanken" : /service|werkstatt|ölwechsel|pickerl|inspektion|reparatur/.test(t) ? "Service/Werkstatt" : /reifen/.test(t) ? "Reifen" : /wasch|staubsaug/.test(t) ? "Pflege/Waschen" : /zubehör|gekauft|einkauf/.test(t) ? "Zubehör" : /park/.test(t) ? "Parken" : /maut|vignette/.test(t) ? "Maut/Vignette" : /versicherung/.test(t) ? "Versicherung" : /telefon|handyrechnung/.test(t) ? "Telefon" : /büro/.test(t) ? "Büro" : "Sonstiges";
+      e = { typ: "ausgabe", zeit: z, kategorie: kat, betrag: preisM ? zahlAus(preisM[1]) : null, liter: literM ? zahlAus(literM[1]) : null, km_stand: standM ? zahlAus(standM[1]) : null, zahlart, was: kat === "Tanken" ? null : text.trim().slice(0, 80) };
+    }
+    else if (/pause/.test(t)) {
+      const dm = t.match(/(\d+)\s*(?:min|minuten)/);
+      e = { typ: "pause", zeit: z, dauer_min: dm ? +dm[1] : /halbe stunde/.test(t) ? 30 : /stunde/.test(t) ? 60 : null };
+    }
+    else if (vn || preisM || /fahrt|gefahren|fahrgast|kunde|kundin/.test(t)) {
+      e = { typ: "fahrt", zeit: z, von: vn ? vn[1].trim() : null, nach: vn ? vn[2].trim() : null, km: kmM ? zahlAus(kmM[1]) : null, preis: preisM ? zahlAus(preisM[1]) : null, zahlart, trinkgeld: tgM ? zahlAus(tgM[1] || tgM[2]) : null,
+        art: /flughafen|airport/.test(t) ? "Flughafen" : /kranken|arzt|spital|klinikum|dialyse|bestrahlung/.test(t) ? "Krankenfahrt" : /bote|paket|dokument|lieferung/.test(t) ? "Botenfahrt" : null };
+    }
+    else if (standM) e = { typ: "kmstand", zeit: z, km_stand: zahlAus(standM[1]) };
+    else e = { typ: "notiz", zeit: z, text: text.trim() };
+    return [{ aktion: "neu", eintrag: e }];
+  }
+
+  function listeFuerClaude() {
+    const z = [];
+    const t = S.tag;
+    if (t?.beginn) z.push("beginn | " + t.beginn.zeit + " | " + kurzText({ typ: "beginn", zeit: t.beginn.zeit, km_stand: t.beginn.km }));
+    for (const e of t?.eintraege || []) z.push(e.id + " | " + e.zeit + " | " + kurzText(e));
+    if (t?.ende) z.push("ende | " + t.ende.zeit + " | " + kurzText({ typ: "ende", zeit: t.ende.zeit, km_stand: t.ende.km }));
+    return z.length ? z.join("\n") : "(noch nichts)";
+  }
+  function termineFuerClaude() {
+    const z = sichtbareTermine().slice(0, 25).map((x) => x.id + " | " + x.datum + " " + (x.zeit || "ganztägig") + " | " + (x.titel || "") + (x.ort ? " | " + x.ort : "") + " | Erinnerung " + (x.erinnerungen || []).join(",") + " min vorher");
+    return z.length ? z.join("\n") : "(keine)";
+  }
+
+  async function verstehen(text) {
+    if (S.sample) {
+      const jetzt = jetztHM();
+      const prompt =
+`Du führst das Tagebuch eines selbstständigen Taxifahrers in Gmunden (Oberösterreich). Er spricht alles ins Handy. Der Text kommt aus der Spracherkennung und kann Hörfehler enthalten.
+
+Gesagt: """${text}"""
+
+Jetzt: ${datumLang(S.heute)}, ${jetzt} Uhr. Der Tag, in den eingetragen wird: ${S.tagId}.
+Kalender: ${wochenTabelle()}
+
+Einträge dieses Tages (id | Uhrzeit | Inhalt):
+${listeFuerClaude()}
+
+Kommende Termine (id | wann | Titel | Ort | Erinnerung):
+${termineFuerClaude()}
+
+Antworte NUR mit JSON in dieser Form:
+{"aktionen":[
+ {"aktion":"neu","datum":null,"eintrag":{"typ":"…","zeit":"HH:MM", …}},
+ {"aktion":"aendern","id":"…","felder":{ …nur die geänderten Felder… }},
+ {"aktion":"loeschen","id":"…"}
+]}
+
+Typen und ihre Felder (nur nennen, was gesagt wurde):
+- beginn / ende: Tages- oder Schichtbeginn/-ende. km_stand = Tachostand (Gesamtkilometer).
+- fahrt: von, nach (kurze Ortsangaben ohne Hausnummer), km (Länge dieser Fahrt), preis (Fahrpreis in € ohne Trinkgeld), zahlart ("bar", "karte", "rechnung"), trinkgeld, art (${ARTEN_FAHRT.map((x) => '"' + x + '"').join(", ")}).
+- ausgabe: kategorie (${KAT_AUSGABE.map((x) => '"' + x + '"').join(", ")}), betrag (€), was (kurz, was gekauft oder gemacht wurde), liter (beim Tanken), km_stand (wenn genannt), zahlart ("bar", "karte", "überweisung").
+- pause: dauer_min.
+- kmstand: nur ein Kilometerstand zwischendurch: km_stand.
+- vorkommnis: besonderes Vorkommnis. kategorie (${KAT_VORFALL.map((x) => '"' + x + '"').join(", ")}), text (ein bis zwei sachliche Sätze), km_stand wenn genannt.
+- termin: etwas, woran er erinnert werden will. datum (JJJJ-MM-TT, aus der Kalenderzeile oben), zeit ("HH:MM" oder null wenn ganztägig), dauer_min (nur wenn genannt), titel (kurz, z. B. "Flughafen Salzburg abholen"), ort, notiz, erinnerungen (Liste in Minuten vorher, z. B. "eine Stunde vorher" = [60], "am Vorabend" bei 5 Uhr = Minuten bis zum Vorabend 19 Uhr, also [600]; nur wenn gesagt, sonst weglassen).
+- notiz: alles andere, text.
+
+Regeln:
+- Korrekturen ("die letzte Fahrt war 22 Euro", "Tanken war mit Karte", "letzten Eintrag löschen", "Termin morgen auf 6 Uhr verschieben", "Termin absagen") → "aendern" oder "loeschen" mit der passenden id aus den Listen oben. "letzte" heißt: der jüngste passende Eintrag.
+- "datum" bei "neu" nur setzen (JJJJ-MM-TT), wenn er für einen anderen Tag nachträgt ("gestern", "am Freitag"). Sonst null. Bei Terminen steht das Datum im Eintrag.
+- zeit: nur eine genannte Uhrzeit verwenden ("halb drei" am Nachmittag = 14:30), sonst "${jetzt}". Bei Terminen ohne Uhrzeit: null.
+- Zahlen als JSON-Zahlen: "84.250" Kilometer = 84250, "12,50 Euro" = 12.5.
+- Nichts erfinden und nichts schätzen. Mehrere Dinge in einem Satz ergeben mehrere Aktionen.
+- Bei Fahrten keine Personennamen, Telefonnummern oder Hausnummern übernehmen. Bei Terminen darf ein genannter Name im Titel stehen.`;
+      try {
+        const r = await S.sample.json(prompt, { modelTier: "quick", cache: false });
+        let liste = Array.isArray(r?.aktionen) ? r.aktionen : Array.isArray(r?.eintraege) ? r.eintraege.map((e) => ({ aktion: "neu", eintrag: e })) : null;
+        liste = (liste || []).filter((a) => a && (
+          (a.aktion === "neu" && TYPEN.includes(a.eintrag?.typ)) ||
+          (a.aktion === "aendern" && a.id && a.felder && typeof a.felder === "object") ||
+          (a.aktion === "loeschen" && a.id)));
+        if (liste.length) return { aktionen: liste, quelle: "claude" };
+      } catch (e) {
+        protokoll("claude-fehler", { code: e?.code || null });
+        if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(e?.code)) S.sample = null;
+      }
+    }
+    return { aktionen: lokalVerstehen(text), quelle: "regeln" };
+  }
+
+  const ZAHLFELDER = ["km_stand", "km", "preis", "trinkgeld", "betrag", "liter", "dauer_min"];
+  const TEXTFELDER = ["von", "nach", "art", "kategorie", "was", "text", "titel", "ort", "notiz"];
+  function bereinigeFelder(f) {
+    const r = {};
+    for (const k of ZAHLFELDER) if (k in f) r[k] = n(f[k]);
+    for (const k of TEXTFELDER) if (k in f) r[k] = f[k] == null || f[k] === "" ? null : String(f[k]).slice(0, 300);
+    if ("zeit" in f) r.zeit = f.zeit == null ? null : /^\d{1,2}:\d{2}$/.test(String(f.zeit)) ? String(f.zeit).padStart(5, "0") : undefined;
+    if ("datum" in f && /^\d{4}-\d{2}-\d{2}$/.test(String(f.datum))) r.datum = String(f.datum);
+    if ("zahlart" in f) { const z = String(f.zahlart || "").toLowerCase().replace("ue", "ü"); r.zahlart = ZAHLARTEN.includes(z) ? z : null; }
+    if ("erinnerungen" in f) {
+      const l = (Array.isArray(f.erinnerungen) ? f.erinnerungen : [f.erinnerungen]).map(Number).filter((v) => isFinite(v) && v >= 0 && v <= 20160);
+      r.erinnerungen = l.length ? [...new Set(l)].slice(0, 4) : null;
+    }
+    for (const k of Object.keys(r)) if (r[k] === undefined) delete r[k];
+    return r;
+  }
+  function bereinigeEintrag(e, gesagt) {
+    const r = { id: neueId(), typ: e.typ, zeit: jetztHM(), gesagt, ...bereinigeFelder(e) };
+    if (!r.zeit) r.zeit = jetztHM();
+    for (const k of Object.keys(r)) if (r[k] == null) delete r[k];
+    return r;
+  }
+
+  /* ---------- Schreiben (einer nach dem anderen) ---------- */
+  let kette = Promise.resolve();
+  function schreibe(pfad, aendern) {
+    const job = kette.then(async () => {
+      const ref = S.db.doc(pfad);
+      const snap = await ref.get();
+      const alt = snap.exists ? structuredClone(snap.data()) : null;
+      const neu = aendern(alt ? structuredClone(alt) : null);
+      if (neu === undefined) return { alt, ergebnis: null };
+      if (neu === null) await ref.delete(); else { neu.geaendert = new Date().toISOString(); await ref.set(neu); }
+      return { alt, ergebnis: neu };
+    });
+    kette = job.catch(() => {});
+    return job;
+  }
+  function schreibeTag(id, aendern) {
+    let erg;
+    return schreibe("tage/" + id, (alt) => {
+      const t = alt || leererTag(id);
+      t.eintraege = Array.isArray(t.eintraege) ? t.eintraege : [];
+      erg = aendern(t);
+      return t;
+    }).then(({ alt }) => ({ alt, ergebnis: erg }));
+  }
+  function fehlerText(e) {
+    if (e?.code === "quota_exceeded") return "Der Speicher ist voll.";
+    if (e?.code === "invalid_argument") return "Nur der Besitzer kann hier schreiben.";
+    if (e?.code === "unavailable") return "Gerade keine Verbindung. Bitte gleich nochmal.";
+    return "Unbekannter Fehler (" + (e?.code || e?.message || "?") + ").";
+  }
+
+  // Termine: jede Änderung setzt sync auf "offen", der Mac trägt sie dann in den Kalender ein.
+  function terminNeu(e, gesagt) {
+    const f = bereinigeFelder(e);
+    return {
+      id: "t-" + neueId(), datum: f.datum || S.heute, zeit: f.zeit ?? null, dauer_min: f.dauer_min ?? null,
+      titel: f.titel || f.text || "Termin", ort: f.ort ?? null, notiz: f.notiz ?? null,
+      erinnerungen: f.erinnerungen || (f.zeit ? [60] : [900]),
+      gesagt, erstellt: new Date().toISOString(), geloescht: false, sync: "offen", kalender_uid: null,
+    };
+  }
+
+  async function anwenden(aktionen, gesagt) {
+    const texte = [], undo = [];
+    const proTag = new Map();
+    for (const a of aktionen) {
+      const id = a.id ? String(a.id) : null;
+      if (a.aktion === "neu" && a.eintrag.typ === "termin") {
+        const t = terminNeu(a.eintrag, gesagt);
+        await schreibe("termine/" + t.id, () => t);
+        undo.push(() => schreibe("termine/" + t.id, (alt) => alt ? { ...alt, geloescht: true, sync: "offen" } : undefined));
+        texte.push(kurzText({ ...t, typ: "termin" }) + " (" + (t.erinnerungen || []).map(erinnerText).join(", ") + ")");
+        continue;
+      }
+      if (id && id.startsWith("t-")) {
+        const { alt } = await schreibe("termine/" + id, (x) => {
+          if (!x) return undefined;
+          if (a.aktion === "loeschen") return { ...x, geloescht: true, sync: "offen" };
+          const f = bereinigeFelder(a.felder);
+          return { ...x, ...f, sync: "offen" };
+        });
+        if (alt) {
+          undo.push(() => schreibe("termine/" + id, () => ({ ...alt, sync: "offen" })));
+          texte.push(kurzText({ ...alt, typ: "termin" }) + (a.aktion === "loeschen" ? " abgesagt" : " geändert"));
+        }
+        continue;
+      }
+      let tag = S.tagId;
+      const anderer = a.aktion === "neu" ? String(a.datum || a.eintrag?.datum || "") : "";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(anderer) && anderer <= S.heute) tag = anderer;
+      if (a.eintrag) delete a.eintrag.datum;
+      if (!proTag.has(tag)) proTag.set(tag, []);
+      proTag.get(tag).push(a);
+    }
+    for (const [tag, liste] of proTag) {
+      const { alt, ergebnis } = await schreibeTag(tag, (t) => liste.map((a) => wendeAn(t, a, gesagt)).filter(Boolean));
+      undo.push(() => schreibe("tage/" + tag, () => alt || null));
+      const vorsatz = tag !== S.tagId ? datumKurz(tag) + ": " : "";
+      for (const x of ergebnis || []) texte.push(vorsatz + x);
+    }
+    return { texte, undo };
+  }
+  function wendeAn(t, a, gesagt) {
+    if (a.aktion === "loeschen") {
+      if (a.id === "beginn" && t.beginn) { t.beginn = null; return "Tagesbeginn gelöscht"; }
+      if (a.id === "ende" && t.ende) { t.ende = null; return "Tagesende gelöscht"; }
+      const e = t.eintraege.find((x) => x.id === a.id);
+      if (!e) return null;
+      t.eintraege = t.eintraege.filter((x) => x !== e);
+      return kurzText(e) + " gelöscht";
+    }
+    if (a.aktion === "aendern") {
+      const f = bereinigeFelder(a.felder);
+      if (a.id === "beginn" || a.id === "ende") {
+        const alt = t[a.id] || { zeit: jetztHM(), km: null };
+        t[a.id] = { zeit: f.zeit || alt.zeit, km: "km_stand" in f ? f.km_stand : alt.km };
+        return kurzText({ typ: a.id, zeit: t[a.id].zeit, km_stand: t[a.id].km }) + " geändert";
+      }
+      const e = t.eintraege.find((x) => x.id === a.id);
+      if (!e) return null;
+      for (const [k, v] of Object.entries(f)) { if (v == null) delete e[k]; else e[k] = v; }
+      if (a.beleg) e.beleg = a.beleg;
+      sortiere(t);
+      return kurzText(e) + (a.beleg ? "" : " geändert");
+    }
+    const e = bereinigeEintrag(a.eintrag, gesagt);
+    if (a.beleg) e.beleg = a.beleg;
+    if (e.typ === "beginn" || e.typ === "ende") {
+      t[e.typ] = { zeit: e.zeit, km: e.km_stand ?? t[e.typ]?.km ?? null };
+      return kurzText(e);
+    }
+    t.eintraege.push(e);
+    sortiere(t);
+    return kurzText(e);
+  }
+
+  /* ---------- Eintragen ---------- */
+  async function eintragen() {
+    const feld = $("#eingabe");
+    if (S.beschaeftigt) return;
+    if (S.dict?.active()) { try { await S.dict.stop(); } catch {} }
+    const text = feld.value.trim();
+    protokoll("eintragen", { laenge: text.length, speicher: !!S.db, claude: !!S.sample });
+    if (!text) return;
+    if (!S.db) { melde("Speichern geht nur angemeldet auf claude.ai."); return; }
+    S.beschaeftigt = true;
+    const knopf = $("#eintragen");
+    knopf.disabled = true; knopf.textContent = "Verstehe …";
+    feld.blur();
+    try {
+      const { aktionen, quelle } = await verstehen(text);
+      const { texte, undo } = await anwenden(aktionen, text);
+      protokoll("eingetragen", { quelle, aktionen: aktionen.length, ergebnisse: texte.length });
+      feld.value = "";
+      $("#vorlaeufig").textContent = "";
+      if (texte.length) {
+        quittiere(texte, quelle, async () => { for (const u of undo.reverse()) await u(); $("#quittung").hidden = true; melde("Zurückgenommen."); });
+      } else {
+        feld.value = text;
+        quittiere(["Nichts gefunden, was zu ändern wäre. Der Text steht noch im Feld."], quelle, null);
+      }
+    } catch (e) {
+      protokoll("eintragen-fehler", { code: e?.code || null, text: String(e?.message || "").slice(0, 160) });
+      melde("Nicht gespeichert: " + fehlerText(e) + " Der Text bleibt stehen.");
+    } finally {
+      S.beschaeftigt = false;
+      knopf.disabled = false; knopf.textContent = "Eintragen";
+    }
+  }
+
+  /* ---------- Beleg scannen ---------- */
+  async function verkleinern(datei, max = 1800) {
+    const url = URL.createObjectURL(datei);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const f = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * f); c.height = Math.round(img.naturalHeight * f);
+      const g = c.getContext("2d");
+      g.fillStyle = "#ffffff"; g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(img, 0, 0, c.width, c.height);
+      return await new Promise((ok, nein) => c.toBlob((b) => (b ? ok(b) : nein(new Error("Bild nicht lesbar"))), "image/jpeg", 0.85));
+    } finally { URL.revokeObjectURL(url); }
+  }
+
+  async function belegLesen(bild) {
+    if (!S.sample || !S.bilder) return null;
+    const prompt =
+`Auf dem Foto ist ein Beleg (Kassenbon, Tankbeleg oder Rechnung) für das Tagebuch eines selbstständigen Taxifahrers in Österreich.
+
+Jetzt: ${datumLang(S.heute)}, ${jetztHM()} Uhr. Der Tag, in den eingetragen wird: ${S.tagId}.
+Einträge dieses Tages (id | Uhrzeit | Inhalt):
+${listeFuerClaude()}
+
+Antworte NUR mit JSON in dieser Form:
+{"lesbar":true,"datum":"JJJJ-MM-TT","zeit":"HH:MM","haendler":"…","kategorie":"…","was":"…","betrag":0,"liter":null,"zahlart":null,"mwst":[{"satz":20,"betrag":0}],"beleg_nr":null,"km_stand":null,"passt_zu":null}
+
+Regeln:
+- betrag = Endsumme in Euro (brutto). mwst = die ausgewiesenen Steuerbeträge je Satz, sonst [].
+- kategorie: ${KAT_AUSGABE.map((x) => '"' + x + '"').join(", ")}.
+- was: kurz, was gekauft oder gemacht wurde (z. B. "Diesel", "Ölwechsel", "Handyhalterung").
+- haendler: Name des Geschäfts oder der Tankstelle, ohne Adresse.
+- liter nur bei Treibstoff. zahlart "bar", "karte" oder "überweisung", wenn erkennbar.
+- datum und zeit vom Beleg, wenn lesbar, sonst null.
+- passt_zu: die id eines Ausgabe-Eintrags aus der Liste oben mit gleicher Art und gleichem Betrag (bis 0,10 € Abweichung), sonst null.
+- Was nicht lesbar ist: null. Nichts erfinden.
+- Ist auf dem Foto kein Beleg: {"lesbar":false}.`;
+    try {
+      return await S.sample.json(prompt, { images: [bild], cache: false });
+    } catch (e) {
+      if (["not_granted", "sampling_disabled"].includes(e?.code)) S.sample = null;
+      if (e?.code === "images_unavailable") S.bilder = false;
+      return { fehler: e?.code || "?" };
+    }
+  }
+
+  async function belegVerarbeiten(datei) {
+    if (!datei) return;
+    if (!S.db) { melde("Speichern geht nur angemeldet auf claude.ai."); return; }
+    if (S.beschaeftigt) return;
+    S.beschaeftigt = true;
+    const knopf = $("#beleg-knopf");
+    knopf.disabled = true;
+    quittiere(["Beleg wird gelesen …"], "claude", null);
+    try {
+      const bild = await verkleinern(datei);
+      const [hoch, r] = await Promise.all([
+        S.assets ? S.assets.upload(bild, { type: "image/jpeg" }).catch((e) => ({ fehler: e?.code || "?" })) : Promise.resolve(null),
+        belegLesen(bild),
+      ]);
+      const gespeichert = hoch && hoch.id;
+      const gelesen = r && !r.fehler && r.lesbar !== false && n(r.betrag) != null;
+      if (!gespeichert && !gelesen) {
+        quittiere(["Der Beleg konnte weder gespeichert noch gelesen werden" + (hoch?.fehler ? " (" + hoch.fehler + ")" : "") + ". Bitte nochmal versuchen."], "claude", null);
+        return;
+      }
+      // Kein Beleg erkannt oder nicht gelesen: das Foto wird trotzdem abgelegt, den Betrag sagt er nach.
+      const mwst = Array.isArray(r?.mwst) ? r.mwst.map((m) => ({ satz: n(m?.satz), betrag: n(m?.betrag) })).filter((m) => m.betrag != null) : [];
+      const beleg = gespeichert ? { id: hoch.id, haendler: r?.haendler || null, nr: r?.beleg_nr || null, mwst, gelesen: !!gelesen } : null;
+      const eintrag = gelesen
+        ? { typ: "ausgabe", zeit: r.zeit || null, kategorie: KAT_AUSGABE.includes(r.kategorie) ? r.kategorie : "Sonstiges", was: r.was || r.haendler || null, betrag: r.betrag, liter: r.liter, zahlart: r.zahlart, km_stand: r.km_stand }
+        : { typ: "ausgabe", kategorie: "Sonstiges", was: "Beleg, Betrag bitte nachsagen" };
+      let aktion;
+      const datumOk = gelesen && /^\d{4}-\d{2}-\d{2}$/.test(String(r.datum || "")) && r.datum <= S.heute && r.datum >= plusTage(S.heute, -62);
+      // Nur an einen Eintrag ohne Foto hängen; ein vorhandenes Belegfoto wird nie ersetzt.
+      const passt = gelesen && r.passt_zu && (S.tag?.eintraege || []).some((x) => x.id === r.passt_zu && x.typ === "ausgabe" && !x.beleg);
+      if (passt && (!datumOk || r.datum === S.tagId)) {
+        // Nur Gelesenes ergänzen: leere Felder würden sonst gesprochene Angaben (z. B. Liter) löschen.
+        const { zeit, ...rest } = eintrag;
+        const felder = Object.fromEntries(Object.entries(rest).filter(([, v]) => v != null && v !== ""));
+        aktion = { aktion: "aendern", id: r.passt_zu, felder, beleg };
+      } else {
+        aktion = { aktion: "neu", datum: datumOk ? r.datum : null, eintrag, beleg };
+        if (datumOk && r.datum !== S.tagId && !eintrag.zeit) eintrag.zeit = "12:00";
+      }
+      const { texte, undo } = await anwenden([aktion], "Beleg" + (r?.haendler ? " " + r.haendler : ""));
+      const zusatz = [];
+      if (!gespeichert) zusatz.push("Foto nicht gespeichert" + (hoch?.fehler ? " (" + hoch.fehler + ")" : ""));
+      if (!gelesen) zusatz.push(r?.lesbar === false ? "Auf dem Foto war kein Beleg zu erkennen" : "Beleg nicht gelesen, Betrag bitte nachsagen");
+      if (passt) zusatz.push("zum vorhandenen Eintrag gelegt");
+      quittiere([...texte, ...zusatz], "claude", async () => { for (const u of undo.reverse()) await u(); $("#quittung").hidden = true; melde("Zurückgenommen. Das Foto bleibt im Speicher."); });
+    } catch (e) {
+      quittiere(["Beleg ging nicht: " + fehlerText(e)], "claude", null);
+    } finally {
+      S.beschaeftigt = false;
+      knopf.disabled = false;
+      $("#beleg-datei").value = "";
+    }
+  }
+
+  /* ---------- Darstellung: Tag ---------- */
+  function setze(id, text) { const el = document.getElementById(id); if (el.textContent !== text) el.textContent = text; }
+  function zeigeTag() {
+    const id = S.tagId, t = S.tag, aktiv = istAktiv(id);
+    const istHeute = id === S.heute, istGestern = id === plusTage(S.heute, -1);
+    setze("tag-titel", istHeute ? "Heute" : istGestern ? "Gestern" : datumKurz(id));
+    setze("tag-unter", datumLang(id));
+    const pille = $("#tag-pille");
+    if (t?.beginn && !t?.ende) { pille.textContent = (aktiv ? "läuft seit " : "offen seit ") + t.beginn.zeit; pille.className = "pille" + (aktiv ? " laeuft" : ""); }
+    else if (t?.ende) { pille.textContent = "beendet " + t.ende.zeit; pille.className = "pille"; }
+    else { pille.textContent = t?.eintraege?.length ? "ohne Beginn" : "nicht begonnen"; pille.className = "pille"; }
+    $("#tag-vor").disabled = id >= S.heute;
+
+    const k = kennzahlen(t, aktiv);
+    setze("m-umsatz", euro(k.umsatz, k.umsatz >= 1000));
+    setze("m-fahrten", String(k.fahrten));
+    setze("m-km", k.tageskm != null ? km(k.tageskm) + (k.tageskmBisher ? "+" : "") : "–");
+    setze("m-zeit", hm(k.arbeit));
+    setze("m-bar", k.fahrten ? euro(k.bar) : "–");
+    setze("m-karte", k.fahrten ? euro(k.unbar) : "–");
+    setze("m-trinkgeld", k.trinkgeld ? euro(k.trinkgeld) : "–");
+    setze("m-ausgaben", k.ausgaben ? euro(k.ausgaben) : "–");
+    setze("m-besetzt", k.besetzt ? km(k.besetzt) : "–");
+    setze("m-leer", k.leer != null ? km(k.leer) : "–");
+    setze("m-eurkm", k.eurKm != null ? zahl2.format(k.eurKm) : "–");
+    setze("m-eurstd", k.eurStd != null ? euro(k.eurStd, true) : "–");
+    setze("m-pausen", k.pausen ? k.pausen + " min" : "–");
+    document.querySelectorAll("#ansicht-heute .meter .wert").forEach((w) => w.classList.toggle("leer", w.querySelector("b").textContent === "–"));
+
+    zeigeListe(t);
+    const a = t?.auswertung;
+    setze("tag-auswertung-text", a?.text || "");
+    setze("tag-auswertung-stand", a?.am ? "Ausgewertet " + new Date(a.am).toLocaleString("de-AT", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+    $("#tag-auswerten").textContent = a?.text ? "Neu auswerten" : "Tag auswerten lassen";
+    zeigeTermine();
+  }
+
+  function zeilen(t) {
+    const z = [];
+    if (t?.beginn) z.push({ id: "beginn", typ: "beginn", zeit: t.beginn.zeit, km_stand: t.beginn.km });
+    for (const e of t?.eintraege || []) z.push(e);
+    if (t?.ende) z.push({ id: "ende", typ: "ende", zeit: t.ende.zeit, km_stand: t.ende.km });
+    return z;
+  }
+
+  function zeigeListe(t) {
+    const ul = $("#liste");
+    const z = zeilen(t);
+    if (!S.tagGeladen && S.db) { ul.innerHTML = '<li class="leerstand">Lade …</li>'; return; }
+    if (!z.length) {
+      ul.innerHTML = '<li class="leerstand"><p>Noch nichts eingetragen. Zum Beginn einfach sagen:</p><p><q>Tagesbeginn, km-Stand 84.250</q></p><p>Danach jede Fahrt, jede Ausgabe und alles Besondere so, wie es dir einfällt.</p></li>';
       return;
     }
-    if (laeuft) { try { erkenner.stop(); } catch {} return; }
-    text = "";
-    erkenner = new SR();
-    erkenner.lang = "de-DE";
-    erkenner.interimResults = true;
-    erkenner.continuous = false;
-    erkenner.maxAlternatives = 1;
-    erkenner.onstart = () => { laeuft = true; $("#knopf").classList.add("hoert"); zeige("Ich höre …", ""); };
-    erkenner.onresult = (e) => {
-      let gesamt = "", endgueltig = true;
-      for (let i = 0; i < e.results.length; i++) { gesamt += e.results[i][0].transcript; if (!e.results[i].isFinal) endgueltig = false; }
-      text = gesamt;
-      zeige(endgueltig ? "Verstanden" : "Ich höre …", gesamt, !endgueltig);
-    };
-    erkenner.onerror = (e) => {
-      laeuft = false;
-      $("#knopf").classList.remove("hoert");
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        zeige("Mikrofon nicht erlaubt", "");
-        ersatzZeigen("Das iPhone hat das Mikrofon für diese Seite nicht freigegeben. Beim nächsten Tipp auf den Knopf <b>„Erlauben“</b> wählen – oder unten ins Feld tippen und das Mikrofon der Tastatur nehmen.");
-      } else if (e.error === "no-speech") {
-        zeige("Nichts gehört – nochmal tippen", "");
-      } else if (e.error !== "aborted") {
-        zeige("Spracherkennung gerade nicht da", "");
-        ersatzZeigen("Fehler „" + e.error + "“. Unten ins Feld tippen und das Mikrofon der Tastatur nehmen.");
-      }
-    };
-    erkenner.onend = () => { if (laeuft) fertig(); };
-    try { erkenner.start(); }
-    catch (err) { ersatzZeigen("Spracherkennung startet nicht. Unten ins Feld tippen und das Mikrofon der Tastatur nehmen."); }
+    ul.innerHTML = z.map((e) => {
+      let titel = "", info = [], betrag = "", minus = false, klasse = "", marker = "";
+      if (e.typ === "beginn" || e.typ === "ende") { klasse = " rand"; titel = e.typ === "beginn" ? "Tagesbeginn" : "Tagesende"; if (e.km_stand != null) info.push("km-Stand " + km(e.km_stand)); }
+      else if (e.typ === "fahrt") {
+        titel = [e.von, e.nach].filter(Boolean).map(esc).join(" → ") || "Fahrt";
+        if (e.km != null) info.push(km(e.km) + " km");
+        if (e.zahlart) info.push(esc(ZAHLART_NAME[e.zahlart] || e.zahlart));
+        if (e.trinkgeld) info.push("+" + euro(e.trinkgeld) + " Trinkgeld");
+        if (e.art) marker = e.art;
+        betrag = e.preis != null ? euro(e.preis) : "";
+      } else if (e.typ === "ausgabe") {
+        titel = esc(e.kategorie || "Ausgabe"); minus = true;
+        if (e.beleg) marker = "Beleg";
+        if (e.was) info.push(esc(e.was));
+        if (e.liter != null) info.push(zahlF.format(e.liter) + " l");
+        if (e.km_stand != null) info.push("km-Stand " + km(e.km_stand));
+        if (e.zahlart) info.push(esc(ZAHLART_NAME[e.zahlart] || e.zahlart));
+        betrag = e.betrag != null ? "−" + euro(e.betrag) : "";
+      } else if (e.typ === "pause") { titel = "Pause"; if (e.dauer_min != null) info.push(e.dauer_min + " min"); }
+      else if (e.typ === "kmstand") { titel = "km-Stand " + km(e.km_stand); }
+      else if (e.typ === "vorkommnis") { klasse = " vorfall"; marker = e.kategorie || "Vorkommnis"; titel = esc(e.text || "Vorkommnis"); if (e.km_stand != null) info.push("km-Stand " + km(e.km_stand)); }
+      else { titel = esc(e.text || e.gesagt || "Notiz"); marker = "Notiz"; }
+      const offen = S.offenAuf === e.id;
+      return '<li data-id="' + esc(e.id) + '">' +
+        '<button type="button" class="zeile' + klasse + '" aria-expanded="' + offen + '">' +
+        '<span class="uhr">' + esc(e.zeit || "") + '</span>' +
+        '<span class="was"><span class="titel">' + (marker ? '<span class="marker">' + esc(marker) + '</span>' : "") + titel + '</span>' + (info.length ? '<span class="info">' + info.join(" · ") + '</span>' : "") + '</span>' +
+        '<span class="betrag' + (minus ? " minus" : "") + '">' + betrag + '</span></button>' +
+        (offen ? bearbeitenHtml(e, e.typ) : "") + '</li>';
+    }).join("");
+    ul.querySelectorAll("img[data-beleg]").forEach((img) => { window.__belegHolen(img.dataset.beleg).then((b) => { img.src = URL.createObjectURL(b); }).catch(() => {}); });
   }
 
-  $("#knopf").addEventListener("click", starten);
-  $("#nochmal").addEventListener("click", () => { clearInterval(uhr); starten(); });
-  $("#jetzt").addEventListener("click", () => { clearInterval(uhr); weiter(text); });
-  $("#senden").addEventListener("click", () => weiter($("#eingabe").value));
-  $("#eingabe").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); weiter($("#eingabe").value); } });
-  if (!SR) ersatzZeigen("Dieses Gerät erkennt hier keine Sprache. Tipp ins Feld und nimm das <b>Mikrofon der Tastatur</b>.");
+  /* ---------- Termine ---------- */
+  function terminZeit(x) { const d = ausIso(x.datum); if (x.zeit) { const [h, m] = x.zeit.split(":").map(Number); d.setHours(h, m); } return d; }
+  function sichtbareTermine() {
+    const grenze = Date.now() - 2 * 3600 * 1000;
+    return S.termine.filter((x) => !x.geloescht && (x.zeit ? terminZeit(x).getTime() >= grenze : x.datum >= S.heute))
+      .sort((a, b) => (a.datum + (a.zeit || "00:00")).localeCompare(b.datum + (b.zeit || "00:00")));
+  }
+  function zeigeTermine() {
+    const liste = sichtbareTermine();
+    $("#termine-abschnitt").hidden = !liste.length;
+    const jetzt = Date.now();
+    let faellig = null;
+    $("#termine").innerHTML = liste.slice(0, 8).map((x) => {
+      const start = terminZeit(x).getTime();
+      const vorher = Math.max(...(x.erinnerungen?.length ? x.erinnerungen : [60]));
+      const bald = x.zeit ? start - jetzt <= vorher * 60000 && start - jetzt > -3600000 : x.datum === S.heute;
+      if (bald && !faellig) faellig = x;
+      const tagWort = x.datum === S.heute ? "heute" : x.datum === plusTage(S.heute, 1) ? "morgen" : datumKurz(x.datum);
+      const status = x.sync === "ok" ? '<span class="status ok">im Kalender</span>' : x.sync === "fehler" ? '<span class="status fehler">Kalender-Fehler, bitte ändern</span>' : '<span class="status warte">kommt in den Kalender</span>';
+      const info = [x.ort, (x.erinnerungen || []).map(erinnerText).join(", ")].filter(Boolean).map(esc);
+      const offen = S.offenAuf === x.id;
+      return '<li data-id="' + esc(x.id) + '"><button type="button" class="termin' + (bald ? " bald" : "") + '" aria-expanded="' + offen + '">' +
+        '<span class="wann"><small>' + esc(tagWort) + '</small>' + esc(x.zeit || "ganzt.") + '</span>' +
+        '<span><span class="titel">' + esc(x.titel || "Termin") + '</span><span class="info">' + info.join(" · ") + (info.length ? " · " : "") + status + '</span></span></button>' +
+        (offen ? bearbeitenHtml(x, "termin") : "") + '</li>';
+    }).join("");
+    const er = $("#erinnerung");
+    if (faellig) {
+      const rest = faellig.zeit ? Math.round((terminZeit(faellig).getTime() - jetzt) / 60000) : null;
+      er.innerHTML = "<p><strong>Erinnerung:</strong> " + esc(faellig.titel || "Termin") + (faellig.zeit ? " um " + esc(faellig.zeit) + (rest > 0 ? " (in " + (rest >= 60 ? hm(rest) + " Std." : rest + " min") + ")" : " (jetzt)") : " heute") + (faellig.ort ? ", " + esc(faellig.ort) : "") + "</p>";
+      er.hidden = false;
+    } else er.hidden = true;
+  }
+
+  /* ---------- Bearbeiten ---------- */
+  const FELDER = {
+    beginn: [["zeit", "Uhrzeit", "time"], ["km_stand", "km-Stand", "zahl"]],
+    ende: [["zeit", "Uhrzeit", "time"], ["km_stand", "km-Stand", "zahl"]],
+    fahrt: [["zeit", "Uhrzeit", "time"], ["preis", "Fahrpreis €", "zahl"], ["von", "Von", "text"], ["nach", "Nach", "text"], ["km", "Strecke km", "zahl"], ["zahlart", "Zahlart", "zahlart"], ["trinkgeld", "Trinkgeld €", "zahl"], ["art", "Art", "art"]],
+    ausgabe: [["zeit", "Uhrzeit", "time"], ["betrag", "Betrag €", "zahl"], ["kategorie", "Wofür", "katAusgabe"], ["was", "Was genau", "text"], ["liter", "Liter", "zahl"], ["km_stand", "km-Stand", "zahl"], ["zahlart", "Zahlart", "zahlart"]],
+    pause: [["zeit", "Uhrzeit", "time"], ["dauer_min", "Dauer min", "zahl"]],
+    kmstand: [["zeit", "Uhrzeit", "time"], ["km_stand", "km-Stand", "zahl"]],
+    vorkommnis: [["zeit", "Uhrzeit", "time"], ["kategorie", "Art", "katVorfall"], ["text", "Was ist passiert", "breit"], ["km_stand", "km-Stand", "zahl"]],
+    notiz: [["zeit", "Uhrzeit", "time"], ["text", "Notiz", "breit"]],
+    termin: [["datum", "Datum", "date"], ["zeit", "Uhrzeit", "time"], ["titel", "Was", "breit"], ["ort", "Ort", "text"], ["dauer_min", "Dauer min", "zahl"], ["erinnerungen", "Erinnern (min vorher)", "liste"], ["notiz", "Notiz", "breit"]],
+  };
+  const AUSWAHL = {
+    zahlart: [["", "–"], ...ZAHLARTEN.map((z) => [z, ZAHLART_NAME[z]])],
+    art: [["", "–"], ...ARTEN_FAHRT.map((x) => [x, x])],
+    katAusgabe: KAT_AUSGABE.map((x) => [x, x]),
+    katVorfall: KAT_VORFALL.map((x) => [x, x]),
+  };
+  function bearbeitenHtml(e, typ) {
+    const felder = FELDER[typ] || FELDER.notiz;
+    const html = felder.map(([f, name, art]) => {
+      const fid = "f-" + f;
+      let v = e[f] ?? "";
+      let inp;
+      if (AUSWAHL[art]) inp = '<select id="' + fid + '" data-feld="' + f + '">' + AUSWAHL[art].map(([w, l]) => '<option value="' + esc(w) + '"' + (String(v) === w ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select>";
+      else if (art === "time") inp = '<input id="' + fid + '" data-feld="' + f + '" type="time" value="' + esc(v) + '">';
+      else if (art === "date") inp = '<input id="' + fid + '" data-feld="' + f + '" type="date" value="' + esc(v) + '">';
+      else if (art === "zahl") inp = '<input id="' + fid + '" data-feld="' + f + '" inputmode="decimal" value="' + esc(v === "" ? "" : String(v).replace(".", ",")) + '">';
+      else if (art === "liste") inp = '<input id="' + fid + '" data-feld="' + f + '" inputmode="numeric" value="' + esc(Array.isArray(v) ? v.join(", ") : v) + '">';
+      else inp = '<input id="' + fid + '" data-feld="' + f + '" type="text" value="' + esc(v) + '">';
+      return '<label class="feld' + (art === "breit" ? " breit" : "") + '"><span>' + name + "</span>" + inp + "</label>";
+    }).join("");
+    let beleg = "";
+    if (e.beleg?.id) {
+      const steuer = (e.beleg.mwst || []).map((m) => (m.satz != null ? m.satz + " %: " : "MwSt: ") + euro(m.betrag)).join(", ");
+      const info = [e.beleg.haendler, e.beleg.nr ? "Nr. " + e.beleg.nr : null, steuer ? "MwSt " + steuer : null].filter(Boolean).map(esc).join(" · ");
+      beleg = '<img class="beleg-bild" data-beleg="' + esc(e.beleg.id) + '" alt="Foto des Belegs">' + (info ? '<p class="beleg-info">' + info + "</p>" : "");
+    }
+    return '<div class="bearbeiten">' + beleg + '<div class="felder">' + html + "</div>" +
+      (e.gesagt ? '<p class="gesagt">Gesagt: „' + esc(e.gesagt) + '“</p>' : "") +
+      '<div class="knoepfe"><button type="button" class="knopf weg' + (S.loeschSicher ? " sicher" : "") + '" data-aktion="loeschen">' + (S.loeschSicher ? (typ === "termin" ? "Wirklich absagen" : "Wirklich löschen") : (typ === "termin" ? "Absagen" : "Löschen")) + '</button>' +
+      '<button type="button" class="knopf haupt" data-aktion="speichern">Speichern</button></div></div>';
+  }
+  function felderAus(li) {
+    const f = {};
+    li.querySelectorAll("[data-feld]").forEach((el) => {
+      const k = el.dataset.feld, v = el.value.trim();
+      if (k === "erinnerungen") f[k] = v ? v.split(/[,;\s]+/).map(Number).filter((x) => isFinite(x)) : [];
+      else f[k] = v === "" ? null : v;
+    });
+    return bereinigeFelder(f);
+  }
+  async function speichere(li, istTermin) {
+    const eid = li.dataset.id, f = felderAus(li);
+    try {
+      if (istTermin) {
+        const { alt } = await schreibe("termine/" + eid, (x) => x ? { ...x, ...f, erinnerungen: f.erinnerungen || x.erinnerungen, sync: "offen" } : undefined);
+        quittiere(["Termin geändert"], "claude", async () => { await schreibe("termine/" + eid, () => ({ ...alt, sync: "offen" })); $("#quittung").hidden = true; });
+      } else {
+        const id = S.tagId;
+        const { alt } = await schreibeTag(id, (t) => {
+          if (eid === "beginn" || eid === "ende") { t[eid] = { zeit: f.zeit || t[eid]?.zeit || jetztHM(), km: f.km_stand ?? null }; return; }
+          const e = t.eintraege.find((x) => x.id === eid);
+          if (!e) return;
+          for (const [k, v] of Object.entries(f)) { if (v == null) delete e[k]; else e[k] = v; }
+          sortiere(t);
+        });
+        quittiere(["Gespeichert"], "claude", async () => { await schreibe("tage/" + id, () => alt || null); $("#quittung").hidden = true; });
+      }
+      S.offenAuf = null; S.loeschSicher = false; zeigeTag();
+    } catch (e) { melde("Nicht gespeichert: " + fehlerText(e)); }
+  }
+  async function loesche(li, istTermin) {
+    if (!S.loeschSicher) { S.loeschSicher = true; zeigeTag(); return; }
+    const eid = li.dataset.id;
+    try {
+      if (istTermin) {
+        const { alt } = await schreibe("termine/" + eid, (x) => x ? { ...x, geloescht: true, sync: "offen" } : undefined);
+        quittiere(["Termin abgesagt"], "claude", async () => { await schreibe("termine/" + eid, () => ({ ...alt, sync: "offen" })); $("#quittung").hidden = true; });
+      } else {
+        const id = S.tagId;
+        const { alt } = await schreibeTag(id, (t) => {
+          if (eid === "beginn") t.beginn = null;
+          else if (eid === "ende") t.ende = null;
+          else t.eintraege = t.eintraege.filter((x) => x.id !== eid);
+        });
+        quittiere(["Gelöscht"], "claude", async () => { await schreibe("tage/" + id, () => alt || null); $("#quittung").hidden = true; });
+      }
+      S.offenAuf = null; S.loeschSicher = false; zeigeTag();
+    } catch (e) { melde("Nicht gelöscht: " + fehlerText(e)); }
+  }
+
+  /* ---------- Darstellung: Monat ---------- */
+  function monatsZahlen(tage) {
+    const z = { umsatz: 0, tage: 0, km: 0, arbeit: 0, fahrten: 0, ausgaben: 0, trinkgeld: 0, leer: 0, kmUmsatz: 0, zeitUmsatz: 0, vorfaelle: 0, bar: 0, unbar: 0, besetzt: 0 };
+    for (const t of tage) {
+      const k = kennzahlen(t, false);
+      if (t.beginn || k.fahrten) z.tage++;
+      z.umsatz += k.umsatz; z.fahrten += k.fahrten; z.ausgaben += k.ausgaben; z.trinkgeld += k.trinkgeld; z.vorfaelle += k.vorfaelle;
+      z.bar += k.bar; z.unbar += k.unbar; z.besetzt += k.besetzt;
+      if (k.tageskm != null) { z.km += k.tageskm; z.leer += k.leer || 0; z.kmUmsatz += k.umsatz; }
+      if (k.arbeit != null) { z.arbeit += k.arbeit; z.zeitUmsatz += k.umsatz; }
+    }
+    z.ergebnis = z.umsatz + z.trinkgeld - z.ausgaben;
+    z.eurKm = z.km > 0 ? z.kmUmsatz / z.km : null;
+    z.eurStd = z.arbeit > 0 ? z.zeitUmsatz / (z.arbeit / 60) : null;
+    const tb = tankbuch(tage).filter((s) => s.seit && s.liter);
+    const kmT = tb.reduce((a, s) => a + s.seit, 0), lT = tb.reduce((a, s) => a + s.liter, 0);
+    z.verbrauch = kmT > 0 ? (lT / kmT) * 100 : null;
+    return z;
+  }
+  function ausgabenNachArt(tage) {
+    const o = new Map();
+    for (const t of tage) for (const e of t.eintraege || []) if (e.typ === "ausgabe") {
+      const k = e.kategorie || "Sonstiges"; const x = o.get(k) || { anzahl: 0, betrag: 0 };
+      x.anzahl++; x.betrag += n(e.betrag) || 0; o.set(k, x);
+    }
+    return [...o.entries()].sort((a, b) => b[1].betrag - a[1].betrag);
+  }
+  function vorfaelle(tage) {
+    const l = [];
+    for (const t of tage) for (const e of t.eintraege || []) if (e.typ === "vorkommnis") l.push({ datum: t.datum, ...e });
+    return l;
+  }
+  function zeigeMonat() {
+    const m = S.monat;
+    setze("monat-titel", monatName(m));
+    setze("monat-unter", m === S.heute.slice(0, 7) ? "laufender Monat" : "");
+    $("#monat-vor").disabled = m >= S.heute.slice(0, 7);
+    const tage = [...S.monatTage].sort((a, b) => a.datum.localeCompare(b.datum));
+    const z = monatsZahlen(tage);
+    const leer = !tage.length;
+    const w = (x) => (leer ? "–" : x);
+    setze("mm-umsatz", w(euro(z.umsatz, true)));
+    setze("mm-tage", w(String(z.tage)));
+    setze("mm-km", w(km(z.km)));
+    setze("mm-zeit", w(hm(z.arbeit)));
+    setze("mm-fahrten", w(String(z.fahrten)));
+    setze("mm-trinkgeld", w(euro(z.trinkgeld, true)));
+    setze("mm-ausgaben", w(euro(z.ausgaben, true)));
+    setze("mm-ergebnis", w(euro(z.ergebnis, true)));
+    setze("mm-leer", w(km(z.leer)));
+    setze("mm-verbrauch", z.verbrauch != null ? zahlF.format(z.verbrauch) : "–");
+    setze("mm-eurkm", z.eurKm != null ? zahl2.format(z.eurKm) : "–");
+    setze("mm-eurstd", z.eurStd != null ? euro(z.eurStd, true) : "–");
+    setze("mm-vorfaelle", w(String(z.vorfaelle)));
+    document.querySelectorAll("#ansicht-monat .meter .wert").forEach((el) => el.classList.toggle("leer", el.querySelector("b").textContent === "–"));
+
+    const tb = $("#monat-tabelle");
+    if (!S.monatGeladen && S.db) tb.innerHTML = '<tr><td colspan="6" class="leerstand">Lade …</td></tr>';
+    else if (leer) tb.innerHTML = '<tr><td colspan="6" class="leerstand">In diesem Monat ist noch nichts eingetragen.</td></tr>';
+    else tb.innerHTML = tage.map((t) => {
+      const k = kennzahlen(t, istAktiv(t.datum));
+      return '<tr data-tag="' + esc(t.datum) + '"><td>' + esc(datumKurz(t.datum)) + '</td><td class="num">' + hm(k.arbeit) + '</td><td class="num">' + km(k.tageskm) + '</td><td class="num">' + k.fahrten + '</td><td class="num">' + euro(k.umsatz) + '</td><td class="num">' + (k.eurKm != null ? zahl2.format(k.eurKm) : "–") + "</td></tr>";
+    }).join("");
+    $("#monat-summe").innerHTML = leer ? "" : '<tr><td>Summe</td><td class="num">' + hm(z.arbeit) + '</td><td class="num">' + km(z.km) + '</td><td class="num">' + z.fahrten + '</td><td class="num">' + euro(z.umsatz) + '</td><td class="num">' + (z.eurKm != null ? zahl2.format(z.eurKm) : "–") + "</td></tr>";
+
+    const aus = ausgabenNachArt(tage);
+    $("#ausgaben-abschnitt").hidden = !aus.length;
+    $("#ausgaben-tabelle").innerHTML = aus.map(([k, x]) => '<tr><td>' + esc(k) + '</td><td class="num">' + x.anzahl + '</td><td class="num">' + euro(x.betrag) + "</td></tr>").join("");
+    const vf = vorfaelle(tage);
+    $("#vorfaelle-abschnitt").hidden = !vf.length;
+    $("#vorfaelle-tabelle").innerHTML = vf.map((e) => '<tr data-tag="' + esc(e.datum) + '"><td>' + esc(datumKurz(e.datum)) + '</td><td>' + esc(e.kategorie || "") + '</td><td class="text">' + esc(e.text || "") + "</td></tr>").join("");
+
+    const a = S.monatAuswertung;
+    setze("monat-auswertung-text", a?.text || "");
+    setze("monat-auswertung-stand", a?.am ? "Geschrieben " + new Date(a.am).toLocaleString("de-AT", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) + ". Sie steht auch in der Excel-Datei." : "");
+    $("#monat-auswerten").textContent = a?.text ? "Zusammenfassung neu schreiben" : "Zusammenfassung schreiben lassen";
+    $("#monat-auswerten").hidden = !S.sample;
+  }
+
+  /* ---------- Excel ---------- */
+  function ladeSkript(src, name) {
+    if (window[name]) return Promise.resolve(window[name]);
+    return new Promise((ok, nein) => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = () => (window[name] ? ok(window[name]) : nein(new Error(name + " fehlt")));
+      s.onerror = () => nein(new Error(name + " nicht ladbar"));
+      document.head.appendChild(s);
+    });
+  }
+  const ladeXlsx = () => ladeSkript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js", "XLSX");
+  function belegName(t, e) {
+    const teile = [t.datum, (e.zeit || "").replace(":", ""), e.kategorie || "Beleg", e.betrag != null ? String(n(e.betrag).toFixed(2)).replace(".", ",") + "EUR" : null];
+    return teile.filter(Boolean).join("_").replace(/[\/\\:*?"<>|\s]+/g, "-") + ".jpg";
+  }
+  async function speichereBelegeZip() {
+    if (!S.dl) { melde("Dateien speichern geht hier nicht."); return; }
+    const knopf = $("#belege-zip");
+    knopf.disabled = true; knopf.textContent = "Packe …";
+    try {
+      const tage = [...S.monatTage].sort((a, b) => a.datum.localeCompare(b.datum));
+      const liste = [];
+      for (const t of tage) for (const e of t.eintraege || []) if (e.beleg?.id) liste.push([t, e]);
+      if (!liste.length) { melde("In diesem Monat gibt es keine Belegfotos."); return; }
+      const JSZip = await ladeSkript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js", "JSZip");
+      const zip = new JSZip();
+      let fehlt = 0;
+      const namen = new Set();
+      for (const [t, e] of liste) {
+        try {
+          const foto = await window.__belegHolen(e.beleg.id);
+          let name = belegName(t, e), i = 2;
+          while (namen.has(name)) name = name.replace(/(_\d+)?\.jpg$/, "_" + i++ + ".jpg");
+          namen.add(name);
+          zip.file(name, foto);
+        } catch { fehlt++; }
+      }
+      if (!namen.size) { melde("Die Belegfotos ließen sich nicht laden."); return; }
+      const blob = await zip.generateAsync({ type: "blob" });
+      await S.dl.save({ filename: "Taxi-Belege " + S.monat + ".zip", data: blob });
+      if (fehlt) melde(fehlt + " Belegfoto(s) fehlten.");
+    } catch (e) {
+      if (e?.code !== "declined") melde("ZIP ging nicht: " + (e?.code || e?.message || "?"));
+    } finally {
+      knopf.disabled = false; knopf.textContent = "Belege als ZIP";
+    }
+  }
+  function excelDatum(iso) { if (!iso) return null; const [y, m, d] = iso.split("-").map(Number); return (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000; }
+  function excelZeit(hmS) { const m = minuten(hmS); return m == null ? null : m / 1440; }
+  const FMT = { datum: "m/d/yy" /* Excel-Kurzdatum, erscheint im Gebietsschema (22.11.2026) */, zeit: "hh:mm", euro: '#,##0.00 "€"', km: "#,##0", zahl1: "0.0", zahl2: "0.00" };
+  function blatt(X, kopf, zeilen, formate, breiten) {
+    const ws = X.utils.aoa_to_sheet([kopf, ...zeilen]);
+    for (let r = 1; r <= zeilen.length; r++) for (const [c, f] of Object.entries(formate || {})) {
+      const zelle = ws[X.utils.encode_cell({ r, c: Number(c) })];
+      if (zelle && zelle.t === "n") zelle.z = FMT[f] || f;
+    }
+    ws["!cols"] = (breiten || kopf.map((k) => Math.max(10, String(k).length + 2))).map((w) => ({ wch: w }));
+    ws["!autofilter"] = { ref: X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: zeilen.length, c: kopf.length - 1 } }) };
+    return ws;
+  }
+  async function speichereExcel() {
+    if (!S.dl) { melde("Dateien speichern geht hier nicht."); return; }
+    const knopf = $("#excel");
+    knopf.disabled = true; knopf.textContent = "Erstelle …";
+    try {
+      const X = await ladeXlsx();
+      const tage = [...S.monatTage].sort((a, b) => a.datum.localeCompare(b.datum));
+      let vorher = [], termine = [];
+      try { vorher = (await S.db.collection("tage").where("monat", "==", plusMonate(S.monat, -1)).get()).docs.map((d) => d.data()); } catch {}
+      try { termine = (await S.db.collection("termine").where("datum", ">=", S.monat + "-01").where("datum", "<", plusMonate(S.monat, 1) + "-01").get()).docs.map((d) => d.data()).filter((x) => !x.geloescht); } catch {}
+      const z = monatsZahlen(tage);
+      const aus = ausgabenNachArt(tage);
+      const wb = X.utils.book_new();
+      const r2 = (x) => (x == null || !isFinite(x) ? null : Math.round(x * 100) / 100);
+
+      // 1. Monat: eine Zeile zum Übernehmen, darunter Ausgaben nach Art und die Zusammenfassung
+      const mKopf = ["Monat", "Arbeitstage", "Stunden", "km gesamt", "Besetzt-km", "Leer-km", "Fahrten", "Umsatz €", "bar €", "Karte/Rechnung €", "Trinkgeld €", "Ausgaben €", "Einnahmen − Ausgaben €", "€ je km", "€ je Stunde", "Verbrauch l/100 km", "Vorkommnisse"];
+      const mZeile = [monatName(S.monat), z.tage, r2(z.arbeit / 60), z.km, r2(z.besetzt), r2(z.leer), z.fahrten, r2(z.umsatz), r2(z.bar), r2(z.unbar), r2(z.trinkgeld), r2(z.ausgaben), r2(z.ergebnis), r2(z.eurKm), r2(z.eurStd), z.verbrauch != null ? Math.round(z.verbrauch * 10) / 10 : null, z.vorfaelle];
+      const rest = [["Ausgaben nach Art", "Anzahl", "Betrag €"], ...aus.map(([k, x]) => [k, x.anzahl, r2(x.betrag)])];
+      if (S.monatAuswertung?.text) { rest.push([], ["Zusammenfassung von Claude"]); for (const l of S.monatAuswertung.text.split(/\n+/)) rest.push([l]); }
+      const ws1 = blatt(X, mKopf, [mZeile], { 2: "zahl2", 3: "km", 4: "km", 5: "km", 7: "euro", 8: "euro", 9: "euro", 10: "euro", 11: "euro", 12: "euro", 13: "zahl2", 14: "euro", 15: "zahl1" }, [24, 12, 10, 11, 11, 10, 9, 12, 11, 15, 12, 12, 20, 9, 12, 16, 13]);
+      delete ws1["!autofilter"];
+      X.utils.sheet_add_aoa(ws1, rest, { origin: { r: 3, c: 0 } });
+      for (let i = 0; i < aus.length; i++) { const c = ws1[X.utils.encode_cell({ r: 4 + i, c: 2 })]; if (c && c.t === "n") c.z = FMT.euro; }
+      X.utils.book_append_sheet(wb, ws1, "Monat");
+
+      // 2. Tage
+      const tKopf = ["Datum", "Wochentag", "Beginn", "Ende", "km-Stand Beginn", "km-Stand Ende", "Tages-km", "Besetzt-km", "Leer-km", "Pausen min", "Arbeitszeit Std.", "Fahrten", "Umsatz €", "bar €", "Karte/Rechnung €", "Trinkgeld €", "Ausgaben €", "€ je km", "€ je Stunde"];
+      const tZeilen = tage.map((t) => { const k = kennzahlen(t, false); return [excelDatum(t.datum), ausIso(t.datum).toLocaleDateString("de-AT", { weekday: "short" }), excelZeit(t.beginn?.zeit), excelZeit(t.ende?.zeit), n(t.beginn?.km), n(t.ende?.km), k.tageskm, r2(k.besetzt), r2(k.leer), k.pausen || null, k.arbeit != null ? r2(k.arbeit / 60) : null, k.fahrten, r2(k.umsatz), r2(k.bar), r2(k.unbar), r2(k.trinkgeld), r2(k.ausgaben), r2(k.eurKm), r2(k.eurStd)]; });
+      X.utils.book_append_sheet(wb, blatt(X, tKopf, tZeilen, { 0: "datum", 2: "zeit", 3: "zeit", 4: "km", 5: "km", 6: "km", 7: "km", 8: "km", 10: "zahl2", 12: "euro", 13: "euro", 14: "euro", 15: "euro", 16: "euro", 17: "zahl2", 18: "euro" }), "Tage");
+
+      // 3. Fahrten
+      const fZeilen = [];
+      for (const t of tage) for (const e of t.eintraege || []) if (e.typ === "fahrt") fZeilen.push([excelDatum(t.datum), excelZeit(e.zeit), e.von || "", e.nach || "", n(e.km), n(e.preis), ZAHLART_NAME[e.zahlart] || "", n(e.trinkgeld), e.art || ""]);
+      X.utils.book_append_sheet(wb, blatt(X, ["Datum", "Uhrzeit", "Von", "Nach", "km", "Fahrpreis €", "Zahlart", "Trinkgeld €", "Art"], fZeilen, { 0: "datum", 1: "zeit", 4: "zahl1", 5: "euro", 7: "euro" }, [11, 8, 26, 26, 7, 12, 11, 12, 13]), "Fahrten");
+
+      // 4. Ausgaben
+      const aZeilen = [];
+      for (const t of tage) for (const e of t.eintraege || []) if (e.typ === "ausgabe") {
+        const mw = (e.beleg?.mwst || []).reduce((a, m) => a + (n(m.betrag) || 0), 0);
+        aZeilen.push([excelDatum(t.datum), excelZeit(e.zeit), e.kategorie || "", e.was || "", e.beleg?.haendler || "", n(e.betrag), mw ? r2(mw) : null, ZAHLART_NAME[e.zahlart] || "", n(e.liter), n(e.km_stand), e.beleg?.nr || "", e.beleg ? belegName(t, e) : ""]);
+      }
+      X.utils.book_append_sheet(wb, blatt(X, ["Datum", "Uhrzeit", "Art", "Was", "Händler", "Betrag €", "MwSt €", "Zahlart", "Liter", "km-Stand", "Beleg-Nr.", "Beleg (Datei im ZIP)"], aZeilen, { 0: "datum", 1: "zeit", 5: "euro", 6: "euro", 8: "zahl2", 9: "km" }, [11, 8, 18, 26, 20, 11, 10, 12, 8, 11, 14, 34]), "Ausgaben");
+
+      // 5. Tankbuch (mit dem letzten Tanken des Vormonats als Ausgangspunkt)
+      const tank = tankbuch(tage, vorher).filter((s) => s.monat === S.monat);
+      X.utils.book_append_sheet(wb, blatt(X, ["Datum", "Uhrzeit", "km-Stand", "Liter", "Betrag €", "€ je Liter", "km seit letztem Tanken", "Verbrauch l/100 km", "Zahlart"], tank.map((s) => [excelDatum(s.datum), excelZeit(s.zeit), s.km_stand, s.liter, s.betrag, r2(s.literpreis), s.seit, s.verbrauch != null ? Math.round(s.verbrauch * 10) / 10 : null, ZAHLART_NAME[s.zahlart] || ""]), { 0: "datum", 1: "zeit", 2: "km", 3: "zahl2", 4: "euro", 5: '0.000 "€"', 6: "km", 7: "zahl1" }, [11, 8, 11, 8, 11, 11, 22, 18, 11]), "Tankbuch");
+
+      // 6. Vorkommnisse und Notizen
+      const vZeilen = [];
+      for (const t of tage) for (const e of t.eintraege || []) if (e.typ === "vorkommnis" || e.typ === "notiz") vZeilen.push([excelDatum(t.datum), excelZeit(e.zeit), e.typ === "vorkommnis" ? (e.kategorie || "Vorkommnis") : "Notiz", e.text || e.gesagt || "", n(e.km_stand)]);
+      X.utils.book_append_sheet(wb, blatt(X, ["Datum", "Uhrzeit", "Art", "Beschreibung", "km-Stand"], vZeilen, { 0: "datum", 1: "zeit", 4: "km" }, [11, 8, 18, 60, 11]), "Vorkommnisse");
+
+      // 7. Termine
+      termine.sort((a, b) => (a.datum + (a.zeit || "")).localeCompare(b.datum + (b.zeit || "")));
+      X.utils.book_append_sheet(wb, blatt(X, ["Datum", "Uhrzeit", "Was", "Ort", "Notiz"], termine.map((x) => [excelDatum(x.datum), excelZeit(x.zeit), x.titel || "", x.ort || "", x.notiz || ""]), { 0: "datum", 1: "zeit" }, [11, 8, 36, 24, 30]), "Termine");
+
+      const buf = X.write(wb, { bookType: "xlsx", type: "array", compression: true });
+      await S.dl.save({ filename: "Taxi-Tagebuch " + S.monat + ".xlsx", data: new Blob([buf]) });
+    } catch (e) {
+      if (e?.code !== "declined") melde("Excel-Datei ging nicht: " + (e?.code || e?.message || "?"));
+    } finally {
+      knopf.disabled = false; knopf.textContent = "Excel-Datei speichern";
+    }
+  }
+
+  /* ---------- Auswerten lassen ---------- */
+  function ohneGesagt(t) { const c = structuredClone(t); delete c.auswertung; for (const e of c.eintraege || []) { delete e.gesagt; delete e.id; } return c; }
+  function kurzZahlen(t) {
+    const k = kennzahlen(t, false);
+    const r = (x) => (x == null ? null : Math.round(x * 100) / 100);
+    return { beginn: t.beginn?.zeit || null, ende: t.ende?.zeit || null, fahrten: k.fahrten, umsatz: r(k.umsatz), bar: r(k.bar), unbar: r(k.unbar), trinkgeld: r(k.trinkgeld), tageskm: r(k.tageskm), besetzt_km: r(k.besetzt), leer_km: r(k.leer), arbeit_min: k.arbeit, ausgaben: r(k.ausgaben), eur_je_km: r(k.eurKm), eur_je_std: r(k.eurStd), vorkommnisse: k.vorfaelle };
+  }
+  function zaehle(liste, typ, feld, wert) { const o = {}; for (const e of liste || []) { if (e.typ !== typ || !e[feld]) continue; o[e[feld]] = Math.round(((o[e[feld]] || 0) + (wert ? n(e[wert]) || 0 : 1)) * 100) / 100; } return o; }
+  async function auswerten(welche) {
+    if (!S.sample) { melde("Auswerten braucht Claude, das ist hier nicht verfügbar."); return; }
+    const knopf = welche === "tag" ? $("#tag-auswerten") : $("#monat-auswerten");
+    const ausgabe = welche === "tag" ? $("#tag-auswertung-text") : $("#monat-auswertung-text");
+    knopf.disabled = true; knopf.textContent = "Claude schreibt …";
+    let prompt;
+    if (welche === "tag") {
+      const t = S.tag || leererTag(S.tagId);
+      let vorher = [];
+      try {
+        const q = await S.db.collection("tage").where("datum", ">=", plusTage(S.tagId, -21)).where("datum", "<", S.tagId).get();
+        vorher = q.docs.map((d) => d.data()).map((x) => ({ datum: x.datum, ...kurzZahlen(x) }));
+      } catch {}
+      prompt =
+`Du hilfst einem selbstständigen Taxifahrer in Gmunden (Salzkammergut, Ein-Mann-Betrieb mit Flughafen-, Kranken- und Botenfahrten) bei seinem Tagebuch.
+
+Der Tag ${datumLang(t.datum)} als JSON:
+${JSON.stringify(ohneGesagt(t))}
+
+Kennzahlen dieses Tages: ${JSON.stringify(kurzZahlen(t))}
+Die Tage davor (bis 3 Wochen): ${JSON.stringify(vorher)}
+
+Schreib auf Deutsch, in der du-Form, ohne Überschriften und ohne Markdown-Zeichen wie # oder *:
+1. Zwei bis drei Sätze, wie der Tag lief (Umsatz, Kilometer, Leerkilometer, Zeit, Ausgaben), mit den echten Zahlen, im Vergleich zu den Tagen davor, wenn es welche gibt. Besondere Vorkommnisse kurz erwähnen.
+2. Danach höchstens drei kurze Vorschläge, jeder in einer eigenen Zeile mit „– “ davor. Zum Beispiel zu Leerkilometern, guten Zeiten oder Fahrtarten, Ausgaben, oder fehlenden Angaben (etwa km-Stand am Ende, Zahlart, Strecke, km-Stand beim Tanken).
+Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht. Wenn kaum Daten da sind, sag kurz, was fürs nächste Mal fehlt.`;
+    } else {
+      const tage = [...S.monatTage].sort((a, b) => a.datum.localeCompare(b.datum)).map((x) => ({ datum: x.datum, wochentag: ausIso(x.datum).toLocaleDateString("de-AT", { weekday: "short" }), ...kurzZahlen(x), fahrtarten: zaehle(x.eintraege, "fahrt", "art"), ausgaben_nach_art: zaehle(x.eintraege, "ausgabe", "kategorie", "betrag") }));
+      const vf = vorfaelle(S.monatTage).map((e) => ({ datum: e.datum, art: e.kategorie, text: e.text }));
+      prompt =
+`Du hilfst einem selbstständigen Taxifahrer in Gmunden (Salzkammergut, Ein-Mann-Betrieb) bei seinem Tagebuch.
+
+Monat ${monatName(S.monat)}, je Tag: ${JSON.stringify(tage)}
+Monatssummen: ${JSON.stringify(monatsZahlen(S.monatTage))}
+Ausgaben nach Art: ${JSON.stringify(ausgabenNachArt(S.monatTage))}
+Besondere Vorkommnisse: ${JSON.stringify(vf)}
+
+Schreib die Monatszusammenfassung auf Deutsch, du-Form, ohne Überschriften und ohne Markdown-Zeichen:
+1. Drei bis fünf Sätze zum Monat mit den echten Zahlen: Umsatz, Trinkgeld, Ausgaben und was übrig bleibt, Arbeitstage, Stunden, Kilometer, Leeranteil, Euro je Kilometer und je Stunde, Verbrauch, beste und schwächste Tage oder Wochentage. Besondere Vorkommnisse kurz nennen.
+2. Höchstens vier Vorschläge für den nächsten Monat, jeder in einer eigenen Zeile mit „– “ davor.
+Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
+    }
+    ausgabe.textContent = "Claude schreibt …";
+    try {
+      const { text } = await S.sample(prompt, { cache: false, onText: ({ text }) => { ausgabe.textContent = text; } });
+      const eintrag = { text: text.trim(), am: new Date().toISOString() };
+      if (welche === "tag") await schreibeTag(S.tagId, (t) => { t.auswertung = eintrag; });
+      else await S.db.doc("monate/" + S.monat).set({ monat: S.monat, auswertung: eintrag });
+    } catch (e) {
+      ausgabe.textContent = e?.text || "";
+      const was = { not_granted: "Claude wurde für diese Seite nicht erlaubt.", rate_limited: "Gerade zu viele Anfragen. Bitte später nochmal.", session_expired: "Bitte neu anmelden." }[e?.code];
+      if (e?.code !== "cancelled") melde(was || "Auswerten ging nicht (" + (e?.code || "?") + ").");
+      if (["not_granted", "sampling_disabled"].includes(e?.code)) S.sample = null;
+    } finally {
+      knopf.disabled = false;
+      welche === "tag" ? zeigeTag() : zeigeMonat();
+    }
+  }
+
+  /* ---------- Abos ---------- */
+  function aboOffen() {
+    S.subOffen?.();
+    S.subOffen = S.db.collection("tage").where("datum", ">=", plusTage(S.heute, -1)).onSnapshot((snap) => {
+      S.offen = new Map(snap.docs.map((d) => [d.id, d.data()]));
+      if (S.folgen) waehleTag(aktiverTag(), true); else zeigeTag();
+    }, () => {});
+    S.subTermine?.();
+    S.subTermine = S.db.collection("termine").where("datum", ">=", plusTage(S.heute, -1)).onSnapshot((snap) => {
+      S.termine = snap.docs.map((d) => d.data());
+      zeigeTermine();
+    }, () => {});
+  }
+  function aboTag(id) {
+    S.subTag?.();
+    S.tagGeladen = false;
+    const timer = setTimeout(() => { if (!S.tagGeladen) { S.tagGeladen = true; zeigeTag(); melde("Die Daten sind gerade nicht erreichbar. Was du einträgst, wird trotzdem gesendet."); } }, 10000);
+    S.subTag = S.db.doc("tage/" + id).onSnapshot((d) => {
+      if (id !== S.tagId) return;
+      S.tag = d.exists ? d.data() : null;
+      if (!d.metadata.fromCache || d.exists) { S.tagGeladen = true; clearTimeout(timer); }
+      zeigeTag();
+    }, (e) => { clearTimeout(timer); S.tagGeladen = true; zeigeTag(); melde("Verbindung zum Tagebuch verloren (" + e.code + "). Bitte Seite neu öffnen."); });
+  }
+  function aboMonat(m) {
+    S.subMonat?.(); S.subMonatAusw?.();
+    S.monatGeladen = false; S.monatTage = []; S.monatAuswertung = null;
+    S.subMonat = S.db.collection("tage").where("monat", "==", m).onSnapshot((snap) => {
+      if (m !== S.monat) return;
+      S.monatTage = snap.docs.map((d) => d.data());
+      if (!snap.metadata.fromCache || snap.size) S.monatGeladen = true;
+      zeigeMonat();
+    }, () => { S.monatGeladen = true; zeigeMonat(); });
+    S.subMonatAusw = S.db.doc("monate/" + m).onSnapshot((d) => { if (m !== S.monat) return; S.monatAuswertung = d.exists ? d.data().auswertung : null; zeigeMonat(); }, () => {});
+  }
+  async function pruefeMonatsabschluss() {
+    if (Number(S.heute.slice(8, 10)) > 10) return;
+    const vm = plusMonate(S.heute.slice(0, 7), -1);
+    try {
+      const [ausw, tage] = await Promise.all([S.db.doc("monate/" + vm).get(), S.db.collection("tage").where("monat", "==", vm).limit(1).get()]);
+      if (!tage.empty && !(ausw.exists && ausw.data().auswertung)) {
+        $("#abschluss-text").textContent = monatName(vm) + " ist vorbei. Zusammenfassung schreiben lassen und als Excel-Datei speichern?";
+        $("#abschluss-hinweis").hidden = false;
+        $("#abschluss-knopf").onclick = () => { $("#abschluss-hinweis").hidden = true; waehleMonat(vm); zeigeAnsicht("monat"); };
+      }
+    } catch {}
+  }
+
+  function waehleTag(id, vonSelbst) {
+    if (id > S.heute) id = S.heute;
+    const neu = id !== S.tagId;
+    S.tagId = id;
+    if (!vonSelbst) S.folgen = id === aktiverTag();
+    if (neu) { S.tag = null; S.offenAuf = null; S.loeschSicher = false; if (S.db) aboTag(id); }
+    zeigeTag();
+  }
+  function waehleMonat(m) {
+    if (m > S.heute.slice(0, 7)) m = S.heute.slice(0, 7);
+    const neu = m !== S.monat; S.monat = m;
+    if (neu && S.db) aboMonat(m);
+    zeigeMonat();
+  }
+  function zeigeAnsicht(welche) {
+    const monat = welche === "monat";
+    $("#ansicht-heute").hidden = monat; $("#ansicht-monat").hidden = !monat;
+    $("#tab-heute").setAttribute("aria-selected", String(!monat));
+    $("#tab-monat").setAttribute("aria-selected", String(monat));
+    if (monat && !S.monat) waehleMonat(S.tagId.slice(0, 7));
+    const ziel = monat ? "#monat" : "#tag";
+    if (location.hash !== ziel && !(location.hash === "" && !monat)) { try { history.replaceState(null, "", ziel); } catch {} }
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------- Bedienung ---------- */
+  $("#eingabe-form").addEventListener("submit", (ev) => { ev.preventDefault(); eintragen(); });
+  $("#eingabe").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); eintragen(); } });
+  $("#quittung-rueck").addEventListener("click", async () => { const r = S.rueck; S.rueck = null; if (r) { try { await r(); } catch (e) { melde("Zurücknehmen ging nicht: " + fehlerText(e)); } } });
+  $("#tag-zurueck").addEventListener("click", () => waehleTag(plusTage(S.tagId, -1)));
+  $("#tag-vor").addEventListener("click", () => waehleTag(plusTage(S.tagId, 1)));
+  $("#monat-zurueck").addEventListener("click", () => waehleMonat(plusMonate(S.monat, -1)));
+  $("#monat-vor").addEventListener("click", () => waehleMonat(plusMonate(S.monat, 1)));
+  $("#tab-heute").addEventListener("click", () => zeigeAnsicht("heute"));
+  $("#tab-monat").addEventListener("click", () => zeigeAnsicht("monat"));
+  window.addEventListener("hashchange", () => {
+    protokoll("adresse-neu", { raute: location.hash.slice(0, 3) || null, laenge: location.hash.length });
+    if (/^#s-/.test(location.hash)) { linkUebernehmen(); return; }
+    zeigeAnsicht(location.hash === "#monat" ? "monat" : "heute");
+  });
+  document.addEventListener("click", (ev) => { const tr = ev.target.closest("tr[data-tag]"); if (tr) { waehleTag(tr.dataset.tag); zeigeAnsicht("heute"); } });
+  function listenKlick(istTermin) {
+    return (ev) => {
+      const li = ev.target.closest("li[data-id]"); if (!li) return;
+      const bild = ev.target.closest(".beleg-bild");
+      if (bild) { bild.classList.toggle("gross"); return; }
+      const akt = ev.target.closest("[data-aktion]");
+      if (akt?.dataset.aktion === "speichern") return speichere(li, istTermin);
+      if (akt?.dataset.aktion === "loeschen") return loesche(li, istTermin);
+      if (ev.target.closest(".zeile, .termin")) { S.offenAuf = S.offenAuf === li.dataset.id ? null : li.dataset.id; S.loeschSicher = false; zeigeTag(); }
+    };
+  }
+  $("#liste").addEventListener("click", listenKlick(false));
+  $("#termine").addEventListener("click", listenKlick(true));
+  $("#tag-auswerten").addEventListener("click", () => auswerten("tag"));
+  $("#monat-auswerten").addEventListener("click", () => auswerten("monat"));
+  $("#excel").addEventListener("click", speichereExcel);
+  $("#belege-zip").addEventListener("click", speichereBelegeZip);
+  $("#beleg-knopf").addEventListener("click", () => $("#beleg-datei").click());
+  // Mikrofon-Pille: mit Diktierfunktion direkt aufnehmen, am iPhone den Kurzbefehl starten, sonst die Tastatur öffnen.
+  const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const SPRACH_SITZUNG = "https://oe5sos.github.io/taxi-sprechen/"; // Sprech-Probe außerhalb von claude.ai (24.11.)
+  let hinweisTimer = null;
+  window.__mikrofonGesperrt = () => {
+    const h = $("#mic-hinweis");
+    h.innerHTML = "<b>Safari lässt das Mikrofon nicht zu.</b> Neben der Adresse auf „aA“ tippen → Website-Einstellungen → Mikrofon: <b>Erlauben</b>. Dann nochmal „Sprechen“." +
+      "<br><small>Bis dahin geht es über die Tastatur: ins Feld tippen, dort das Mikrofon nehmen.</small>";
+    h.hidden = false;
+    clearTimeout(hinweisTimer);
+    hinweisTimer = setTimeout(() => { h.hidden = true; }, 30000);
+  };
+  $("#mic").addEventListener("click", (ev) => {
+    const d = S.dict;
+    protokoll("mic-tipp", { diktat: !!d });
+    setTimeout(() => protokoll("mic-danach", { fokus: document.activeElement?.id || document.activeElement?.tagName || null, sichtHoehe: Math.round(window.visualViewport?.height || 0), hoehe: innerHeight }), 600);
+    if (d) {
+      ev.preventDefault(); // mit Diktierfunktion kein Fokus aufs Feld, keine Tastatur
+      if (d.active()) { d.stop().then(() => eintragen()).catch(() => {}); return; }
+      d.start().catch((e) => { protokoll("diktat-fehler", { code: e?.code || null }); if (e?.code === "not_granted" || e?.code === "unavailable") window.__mikrofonGesperrt(); else melde("Sprechen ging gerade nicht. Bitte nochmal antippen."); });
+      return;
+    }
+    const f = $("#eingabe");
+    f.focus();
+    try { f.setSelectionRange(f.value.length, f.value.length); } catch {}
+    const h = $("#mic-hinweis");
+    h.hidden = false;
+    clearTimeout(hinweisTimer);
+    hinweisTimer = setTimeout(() => { h.hidden = true; }, 12000);
+  });
+  let eingabenGemeldet = 0;
+  $("#eingabe").addEventListener("input", (ev) => {
+    $("#mic-hinweis").hidden = true;
+    if (eingabenGemeldet < 6) { eingabenGemeldet++; protokoll("eingabe", { art: ev.inputType || null, laenge: ev.target.value.length }); }
+  });
+  $("#eingabe").addEventListener("focus", () => { eingabenGemeldet = 0; protokoll("feld-fokus", { sichtHoehe: Math.round(window.visualViewport?.height || 0) }); });
+  $("#eingabe").addEventListener("blur", (ev) => {
+    const nach = ev.relatedTarget;
+    setTimeout(() => protokoll("feld-verlassen", { laenge: $("#eingabe").value.length, nach: nach ? (nach.id || nach.tagName) : null, seiteHatFokus: document.hasFocus(), aktiv: document.activeElement?.id || document.activeElement?.tagName || null }), 0);
+  });
+  window.addEventListener("blur", () => protokoll("fenster-verliert-fokus"));
+  window.addEventListener("focus", () => protokoll("fenster-hat-fokus"));
+  document.addEventListener("visibilitychange", () => protokoll("sichtbar", { zustand: document.visibilityState }));
+  $("#eingabe").addEventListener("touchstart", () => protokoll("feld-beruehrt"), { passive: true });
+  window.visualViewport?.addEventListener("resize", () => { if (document.activeElement?.id === "eingabe") protokoll("tastatur", { sichtHoehe: Math.round(window.visualViewport.height) }); });
+  $("#beleg-datei").addEventListener("change", (ev) => belegVerarbeiten(ev.target.files?.[0]));
+
+  // Tageswechsel, laufende Arbeitszeit, Erinnerungen
+  setInterval(() => {
+    const h = isoDatum(new Date());
+    if (h !== S.heute) { S.heute = h; if (S.db) aboOffen(); }
+    if (!$("#ansicht-heute").hidden && !S.offenAuf) zeigeTag();
+  }, 30000);
+
+  /* ---------- Start ---------- */
+  function zeigeZustand() {
+    setze("zustand", "Fassung " + FASSUNG + " · Speicher " + (S.db ? "an" : "aus") + " · Claude " + (S.sample ? "an" : "aus") +
+      " · Sprechen über " + (S.dict ? "die Seite" : "die Tastatur") + (D.vollbild ? " · Vollbild" : ""));
+  }
+  /* ---------- Text vom iPhone-Kurzbefehl: #s-<Base64, „+“→„-a“, „/“→„-b“, ohne „=“> ---------- */
+  let bereitLos; const bereit = new Promise((r) => { bereitLos = r; });
+  function linkText(hash) {
+    const m = String(hash || "").match(/^#s-([A-Za-z0-9-]+)$/);
+    if (!m) return null;
+    try {
+      let b = m[1].replace(/-a/g, "+").replace(/-b/g, "/");
+      while (b.length % 4) b += "=";
+      return new TextDecoder().decode(Uint8Array.from(atob(b), (ch) => ch.charCodeAt(0))).trim();
+    } catch { return null; }
+  }
+  async function linkUebernehmen() {
+    const hash = location.hash;
+    const text = linkText(hash);
+    if (text == null) return;
+    try { history.replaceState(null, "", "#tag"); } catch {}
+    // Doppelt nur, wenn derselbe Link binnen 3 Minuten schon ankam (Neuladen); später ist es ein neuer Eintrag.
+    let zuletzt = {};
+    try { zuletzt = JSON.parse(localStorage.getItem("tb-links") || "{}"); } catch {}
+    const jetzt = Date.now();
+    for (const [k, t] of Object.entries(zuletzt)) if (jetzt - t > 180000) delete zuletzt[k];
+    if (zuletzt[hash]) { protokoll("link-doppelt"); return; }
+    zuletzt[hash] = jetzt;
+    try { localStorage.setItem("tb-links", JSON.stringify(zuletzt)); } catch {}
+    protokoll("link-text", { laenge: text.length });
+    if (!text || text === "__probe__") return;
+    zeigeAnsicht("heute");
+    $("#eingabe").value = text;
+    await bereit;
+    eintragen();
+  }
+
+  S.tagId = S.heute;
+  zeigeTag();
+  zeigeZustand();
+  if (location.hash === "#monat") zeigeAnsicht("monat");
+  protokoll("start-adresse", { raute: location.hash.slice(0, 3) || null, laenge: location.hash.length });
+  linkUebernehmen();
+
+  const c = window.claude;
+  if (!c?.use) {
+    const m = $("#meldung-db"); m.hidden = false;
+    m.innerHTML = "<strong>Nur zur Ansicht.</strong> Gespeichert wird nur, wenn die Seite auf claude.ai geöffnet ist.";
+    return;
+  }
+  c.use("db").then((db) => {
+    if (!db) {
+      const m = $("#meldung-db"); m.hidden = false;
+      m.innerHTML = "<strong>Nicht angemeldet.</strong> Melde dich auf claude.ai an, dann wird das Tagebuch gespeichert.";
+      $("#eintragen").disabled = true;
+      S.tagGeladen = true; zeigeTag();
+      return;
+    }
+    S.db = db;
+    aboOffen();
+    aboTag(S.tagId);
+    if (S.monat) aboMonat(S.monat);
+    pruefeMonatsabschluss();
+  });
+  const belegKnopf = () => { $("#beleg-knopf").hidden = !(S.assets || (S.sample && S.bilder)); };
+  c.use("sample").then(async (s) => {
+    S.sample = s; $("#tag-auswertung").hidden = !s; if (S.monat) zeigeMonat();
+    if (s) { try { S.bilder = !!(await s.limits())?.images; } catch { S.bilder = false; } }
+    belegKnopf();
+  });
+  c.use("assets").then((a) => { S.assets = a; belegKnopf(); });
+  c.use("downloads").then((d) => { S.dl = d; $("#excel").hidden = !d; $("#belege-zip").hidden = !d; });
+  Promise.all(["db", "sample", "dictation", "assets", "downloads"].map((n) => c.use(n).then((x) => [n, !!x]).catch(() => [n, false])))
+    .then((liste) => {
+      for (const [n, v] of liste) D.faehig[n] = v; zeigeZustand(); protokoll("geladen", { ...D.faehig });
+      setTimeout(bereitLos, 900); // erst die laufende Schicht kennen, dann eintragen
+    });
+  c.use("dictation").then((d) => {
+    if (!d) return;
+    S.dict = d;
+    const mic = $("#mic"), feld = $("#eingabe");
+    $("#schritte").innerHTML = "<li><b>1</b>„Sprechen“ antippen</li><li><b>2</b>reden</li><li><b>3</b>nochmal antippen, fertig</li>";
+    d.onPartial(({ text }) => { $("#vorlaeufig").textContent = text; });
+    d.onFinal(({ text }) => { feld.value = feld.value ? feld.value + text : text.replace(/^\s+/, ""); $("#vorlaeufig").textContent = ""; });
+    d.onState(({ state, reason }) => {
+      const an = state !== "idle";
+      mic.setAttribute("aria-pressed", String(an));
+      $("#mic-text").textContent = state === "listening" ? "Fertig – eintragen" : state === "idle" ? "Sprechen" : "…";
+      if (state === "listening") $("#mic-hinweis").hidden = true;
+      if (!an && reason) protokoll("diktat-ende", { grund: reason });
+      if (!an && (reason === "not_granted" || reason === "unavailable")) window.__mikrofonGesperrt();
+      if (!an && reason === "ende" && $("#eingabe").value.trim()) eintragen();
+    });
+  });
 })();
 </script>
+
 </body>
 </html>
