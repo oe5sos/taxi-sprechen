@@ -203,11 +203,7 @@
           rec = new SR();
           rec.lang = "de-DE"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
           let schon = "", offen = "";
-          const waechter = setTimeout(() => { // Safari antwortet gar nicht (kein Start, kein Fehler): nicht ewig „…“ zeigen
-            if (zustand !== "starting") return;
-            window.__sprachFehler = "keine Antwort"; const r0 = rec; rec = null; try { r0 && r0.abort(); } catch {}
-            setze("idle", "upstream_error"); nein({ code: "upstream_error" });
-          }, 6000);
+          const waechter = 0; // kein Abbruch-Wächter: Safaris Erlaubnis-Frage beim ersten Mal darf dauern (25.11.)
           rec.onstart = () => { clearTimeout(waechter); setze("listening"); ok(); };
           rec.onresult = (e) => {
             let fest = "", vor = "";
@@ -1960,19 +1956,20 @@ Nichts erfinden. Keine Aussagen über Tarife, Steuern oder Recht.`;
     const mic = $("#mic"), feld = $("#eingabe");
     $("#schritte").innerHTML = "<li><b>1</b>„Sprechen“ antippen</li><li><b>2</b>reden</li><li><b>3</b>nochmal antippen, fertig</li>";
     d.onPartial(({ text }) => {
-      $("#vorlaeufig").textContent = text;
+      feld.value = (S.festText ? S.festText + " " : "") + (text || "");
       const t = (text || "").trim();
       if (!S.endeWort && d.active() && /[\s,.]ende[.!]?$/i.test(t) && !/\b(schicht|dienst|tag|tages|arbeit|arbeits)\s+ende[.!]?$/i.test(t)) {
         S.endeWort = true;
         d.stop().then(() => eintragen()).catch(() => {}).finally(() => { S.endeWort = false; });
       }
     });
-    d.onFinal(({ text }) => { feld.value = feld.value ? feld.value + text : text.replace(/^\s+/, ""); $("#vorlaeufig").textContent = ""; });
+    d.onFinal(({ text }) => { const t = String(text || "").trim(); if (t) S.festText = (S.festText ? S.festText + " " : "") + t; feld.value = S.festText || ""; $("#vorlaeufig").textContent = ""; });
     d.onState(({ state, reason }) => {
       const an = state !== "idle";
       mic.setAttribute("aria-pressed", String(an));
       $("#mic-text").textContent = state === "listening" ? "Fertig – eintragen" : state === "idle" ? "Sprechen" : "…";
       if (state === "listening") $("#mic-hinweis").hidden = true;
+      if (state === "starting") S.festText = $("#eingabe").value.trim();
       if (!an && reason) protokoll("diktat-ende", { grund: reason });
       if (!an && (reason === "not_granted" || reason === "unavailable" || reason === "upstream_error")) window.__mikrofonGesperrt(reason);
       if (!an && reason === "ende" && $("#eingabe").value.trim()) eintragen();
